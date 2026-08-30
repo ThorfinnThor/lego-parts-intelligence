@@ -17,6 +17,43 @@ export const dataSourceConfigSchema = z.object({
   productionApproval: z.boolean(),
 });
 
+const legalCommercializationSchema = z.object({
+  displayAds: z.boolean(),
+  affiliateLinks: z.boolean(),
+});
+
+export const legalReleaseConfigSchema = z.discriminatedUnion('status', [
+  z.object({
+    status: z.literal('draft'),
+    operatorName: z.null(),
+    contactEmail: z.null(),
+    imprintUrl: z.null(),
+    privacyUrl: z.null(),
+    trademarkNotice: z.string().min(1),
+    reviewedAt: z.null(),
+    reviewDueAt: z.null(),
+    approvedBy: z.null(),
+    commercialization: legalCommercializationSchema.extend({
+      displayAds: z.literal(false),
+      affiliateLinks: z.literal(false),
+    }),
+  }),
+  z.object({
+    status: z.literal('approved'),
+    operatorName: z.string().min(1),
+    contactEmail: z.email(),
+    imprintUrl: z.url(),
+    privacyUrl: z.url(),
+    trademarkNotice: z.string().min(1),
+    reviewedAt: z.iso.date(),
+    reviewDueAt: z.iso.date(),
+    approvedBy: z.string().min(1),
+    commercialization: legalCommercializationSchema,
+  }),
+]);
+
+export type LegalReleaseConfig = z.infer<typeof legalReleaseConfigSchema>;
+
 export const publicPartDetailSchema = z.object({
   schemaVersion: z.literal(1),
   exportVersion: z.string().min(1),

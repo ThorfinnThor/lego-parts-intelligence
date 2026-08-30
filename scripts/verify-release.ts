@@ -1,9 +1,40 @@
 import { readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { publicPartDetailSchema, type PublicManifestV1 } from '../packages/data-contracts/src/index';
+import {
+  legalReleaseConfigSchema,
+  publicPartDetailSchema,
+  type PublicManifestV1,
+} from '../packages/data-contracts/src/index';
 
 const root = process.cwd();
 const outDir = path.join(root, 'out');
+const productionRelease = process.env.PRODUCTION_RELEASE === '1';
+if (productionRelease) {
+  const baseUrl = new URL(process.env.APP_BASE_URL ?? 'https://example.com');
+  if (baseUrl.protocol !== 'https:' || baseUrl.hostname === 'example.com' || baseUrl.hostname === 'localhost') {
+    throw new Error('Production APP_BASE_URL must be the final HTTPS production domain.');
+  }
+  const legalConfig = legalReleaseConfigSchema.parse(
+    JSON.parse(await readFile(path.join(root, 'config', 'legal-release.json'), 'utf8')),
+  );
+  if (legalConfig.status !== 'approved') {
+    throw new Error('Production release blocked: legal-release status is not approved.');
+  }
+}
+
+const wranglerConfig = JSON.parse(await readFile(path.join(root, 'wrangler.jsonc'), 'utf8')) as {
+  main?: unknown;
+  workers_dev?: boolean;
+  preview_urls?: boolean;
+  assets?: { directory?: string; binding?: unknown; run_worker_first?: unknown };
+};
+if ('main' in wranglerConfig || wranglerConfig.assets?.binding || wranglerConfig.assets?.run_worker_first) {
+  throw new Error('Public catalogue must remain a direct static-assets deployment with no Worker entry point or asset binding.');
+}
+if (wranglerConfig.assets?.directory !== './out' || wranglerConfig.workers_dev !== false || wranglerConfig.preview_urls !== true) {
+  throw new Error('Wrangler static-assets, production-route, or preview-url invariants changed.');
+}
+
 const files = await listFiles(outDir);
 const outputFiles = new Set(files.map((file) => path.relative(outDir, file)));
 const tier = process.env.CLOUDFLARE_ASSET_TIER ?? 'free';
@@ -19,6 +50,15 @@ const indexHtml = await readFile(path.join(outDir, 'index.html'), 'utf8');
 if (!indexHtml.includes('Data sourced from Rebrickable.')) throw new Error('Global source attribution missing from rendered HTML.');
 if (!indexHtml.includes('<h1')) throw new Error('Home page lacks a server-rendered H1.');
 const robots = await readFile(path.join(outDir, 'robots.txt'), 'utf8');
+const headers = await readFile(path.join(outDir, '_headers'), 'utf8');
+for (const requiredHeader of [
+  'Content-Security-Policy:',
+  'X-Content-Type-Options: nosniff',
+  "frame-ancestors 'none'",
+  'Cache-Control: public, max-age=31536000, immutable',
+]) {
+  if (!headers.includes(requiredHeader)) throw new Error(`Static security/cache header missing: ${requiredHeader}`);
+}
 if (process.env.PREVIEW_RELEASE === '1') {
   if (!indexHtml.includes('name="robots"') || !indexHtml.includes('noindex')) throw new Error('Preview HTML lacks the global noindex directive.');
   if (!robots.includes('Disallow: /')) throw new Error('Preview robots.txt does not block crawling.');
@@ -42,7 +82,7 @@ const launchPages = JSON.parse(await readFile(path.join(outDir, 'data', 'launch-
 if (launchPages.length !== cohortSummary.totalPages) throw new Error('Launch cohort page list and summary count differ.');
 if (new Set(launchPages.map((page) => page.route)).size !== launchPages.length) throw new Error('Duplicate route in launch cohort.');
 if (launchPages.length > cohortConfig.maxPages) throw new Error(`Launch cohort exceeds maxPages: ${launchPages.length}/${cohortConfig.maxPages}.`);
-if (process.env.PRODUCTION_RELEASE === '1' && launchPages.length < cohortConfig.minPages) {
+if (productionRelease && launchPages.length < cohortConfig.minPages) {
   throw new Error(`Production launch cohort is below minPages: ${launchPages.length}/${cohortConfig.minPages}.`);
 }
 const byTypeTotal = Object.values(cohortSummary.byType).reduce((sum, count) => sum + count, 0);

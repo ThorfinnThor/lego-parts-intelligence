@@ -30,6 +30,8 @@ pnpm cf:deploy
 
 GitHub production deployment is manual and protected by an environment. Cloudflare credentials must be account-scoped, stored only as GitHub secrets, and limited to the target account.
 
+The workflow defaults to the free asset ceiling. Switch its explicit `asset_tier` input to `paid` only when the verified artifact cannot stay below the free limit with operating headroom. Production also requires the final HTTPS `APP_BASE_URL`, approved source and legal configuration, and a post-deploy smoke test covering the home page, legal disclosure, robots policy, and sitemap index.
+
 ## Pull-request previews
 
 The `Cloudflare preview` workflow uploads a Worker version with a stable `pr-<number>` preview alias. `wrangler versions upload` does not promote that version to production traffic. The preview is public on the account's `workers.dev` subdomain, so the generated site carries both a global `noindex` directive and `Disallow: /` in `robots.txt`. Fork and Dependabot pull requests skip the deploy job because Cloudflare credentials are not exposed to untrusted automation; they still run the regular CI and CodeQL workflows.

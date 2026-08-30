@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { downloadSnapshotFile } from '../packages/rebrickable/src/download';
+import { SNAPSHOT_FILES } from '../packages/rebrickable/src/snapshot';
 import { stableJson } from '../packages/exporter/src/stable-json';
 
 const urlValue = process.argv.find((argument) => argument.startsWith('--url='))?.slice('--url='.length);
@@ -8,6 +9,9 @@ const nameValue = process.argv.find((argument) => argument.startsWith('--name=')
 const snapshotDirValue = process.argv.find((argument) => argument.startsWith('--snapshot-dir='))?.slice('--snapshot-dir='.length);
 if (!urlValue || !nameValue) {
   throw new Error('Usage: pnpm data:download -- --url=https://approved-source/file.csv --name=parts.csv [--snapshot-dir=work/source-snapshots/rebrickable-v1]');
+}
+if (!(SNAPSHOT_FILES as readonly string[]).includes(nameValue)) {
+  throw new Error(`Source filename must be one of: ${SNAPSHOT_FILES.join(', ')}`);
 }
 
 const retrievedAt = new Date().toISOString();

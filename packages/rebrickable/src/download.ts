@@ -18,6 +18,16 @@ export interface DownloadResult {
   bytes: number;
 }
 
+const MAX_REDIRECTS = 5;
+
+export function assertApprovedSourceUrl(url: URL): void {
+  const hostname = url.hostname.toLowerCase();
+  const isRebrickableHost = hostname === 'rebrickable.com' || hostname.endsWith('.rebrickable.com');
+  if (url.protocol !== 'https:' || !isRebrickableHost || url.username || url.password || (url.port && url.port !== '443')) {
+    throw new Error(`Source URL must use HTTPS on an approved Rebrickable host: ${url.origin}`);
+  }
+}
+
 export async function downloadSnapshotFile(options: DownloadOptions): Promise<DownloadResult> {
   const maxBytes = options.maxBytes ?? 512 * 1024 * 1024;
   const retries = options.retries ?? 3;
@@ -28,11 +38,7 @@ export async function downloadSnapshotFile(options: DownloadOptions): Promise<Do
   let lastError: unknown;
   for (let attempt = 1; attempt <= retries; attempt += 1) {
     try {
-      const response = await fetch(options.url, {
-        redirect: 'follow',
-        signal: AbortSignal.timeout(timeoutMs),
-        headers: { 'user-agent': 'lego-parts-intelligence-source-adapter/0.1' },
-      });
+      const response = await fetchApprovedSource(options.url, AbortSignal.timeout(timeoutMs));
       if (!response.ok || !response.body) throw new Error(`Download failed with HTTP ${response.status}`);
       const declaredLength = Number(response.headers.get('content-length') ?? '0');
       if (declaredLength > maxBytes) throw new Error(`Source file exceeds ${maxBytes} byte guard.`);
@@ -62,4 +68,23 @@ export async function downloadSnapshotFile(options: DownloadOptions): Promise<Do
     }
   }
   throw lastError instanceof Error ? lastError : new Error('Source download failed.');
+}
+
+async function fetchApprovedSource(initialUrl: URL, signal: AbortSignal): Promise<Response> {
+  let currentUrl = initialUrl;
+  for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount += 1) {
+    assertApprovedSourceUrl(currentUrl);
+    const response = await fetch(currentUrl, {
+      redirect: 'manual',
+      signal,
+      headers: { 'user-agent': 'lego-parts-intelligence-source-adapter/0.1' },
+    });
+    if (response.status < 300 || response.status >= 400) return response;
+
+    const location = response.headers.get('location');
+    if (!location) throw new Error(`Source redirect ${response.status} omitted its Location header.`);
+    await response.body?.cancel();
+    currentUrl = new URL(location, currentUrl);
+  }
+  throw new Error(`Source download exceeded ${MAX_REDIRECTS} redirects.`);
 }

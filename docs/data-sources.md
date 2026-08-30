@@ -9,6 +9,8 @@ The implementation assumes, based on the supplied planning material, that offici
 Controls implemented:
 
 - bulk download first; no full-catalogue API pagination;
+- source downloads and every redirect are restricted to HTTPS hosts under `rebrickable.com`;
+- workflow filenames are restricted to the eight canonical snapshot files;
 - complete snapshot required: `SOURCE_SNAPSHOT_DIR` must contain the eight canonical CSV files before a non-fixture build;
 - required CSV headers are checked at ingest and unexpected columns are logged for operator review;
 - public attribution in the global footer and data-source page;
@@ -16,6 +18,7 @@ Controls implemented:
 - display ads are blocked pending full terms-context review;
 - affiliate links are blocked pending partner-specific review;
 - production export requires explicit `productionApproval: true`;
+- `config/legal-release.json` must be complete and set to `approved` before a production build can pass;
 - quarterly `reviewDueAt` is stored in machine-readable configuration.
 
 Operator launch checklist:
@@ -25,7 +28,7 @@ Operator launch checklist:
 - [ ] Confirm external image use and exact attribution wording.
 - [ ] Confirm the advertising/solicitation clause in full context.
 - [ ] Review each affiliate program separately.
-- [ ] Replace the legal-page placeholder.
+- [ ] Complete and approve `config/legal-release.json` with operator, contact, imprint, privacy, and review details.
 - [ ] Set `productionApproval: true` with a reviewed date and owner.
 
 Data sourced from Rebrickable.

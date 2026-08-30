@@ -3,6 +3,7 @@ import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path';
 import {
   dataSourceConfigSchema,
+  legalReleaseConfigSchema,
   publicDonorSetSchema,
   publicPartDetailSchema,
   type CanonicalColor,
@@ -76,7 +77,15 @@ export async function buildRelease(rootDir: string): Promise<ReleaseSummary> {
   const sourceConfig = dataSourceConfigSchema.parse(
     JSON.parse(await readFile(path.join(rootDir, 'config', 'data-sources.json'), 'utf8')),
   );
-  enforceSourceGate(sourceConfig);
+  const legalConfig = legalReleaseConfigSchema.parse(
+    JSON.parse(await readFile(path.join(rootDir, 'config', 'legal-release.json'), 'utf8')),
+  );
+  assertReleaseGates(
+    sourceConfig,
+    legalConfig,
+    process.env.PRODUCTION_RELEASE === '1',
+    new Date().toISOString().slice(0, 10),
+  );
   await assertSnapshotDirectory(sourceDir);
   const sourceSnapshot = await readSnapshotLabel(sourceDir);
 
@@ -300,12 +309,25 @@ export async function buildRelease(rootDir: string): Promise<ReleaseSummary> {
 /** Backwards-compatible fixture entry point used by local tests and previews. */
 export const buildFixtureRelease = buildRelease;
 
-function enforceSourceGate(config: ReturnType<typeof dataSourceConfigSchema.parse>): void {
-  if (config.status === 'blocked' || !config.catalogCommercialUse || config.mocImages) {
+export function assertReleaseGates(
+  sourceConfig: ReturnType<typeof dataSourceConfigSchema.parse>,
+  legalConfig: ReturnType<typeof legalReleaseConfigSchema.parse>,
+  productionRelease: boolean,
+  releaseDate: string,
+): void {
+  if (sourceConfig.status === 'blocked' || !sourceConfig.catalogCommercialUse || sourceConfig.mocImages) {
     throw new Error('Source rights gate blocked this export.');
   }
-  if (process.env.PRODUCTION_RELEASE === '1' && !config.productionApproval) {
-    throw new Error('Production release blocked: operator/legal productionApproval is false.');
+  if (productionRelease) {
+    if (!sourceConfig.productionApproval) {
+      throw new Error('Production release blocked: operator/legal productionApproval is false.');
+    }
+    if (legalConfig.status !== 'approved') {
+      throw new Error('Production release blocked: legal-release status is not approved.');
+    }
+    if (sourceConfig.reviewDueAt < releaseDate || legalConfig.reviewDueAt < releaseDate) {
+      throw new Error('Production release blocked: a source or legal review is overdue.');
+    }
   }
 }
 

@@ -49,8 +49,9 @@ Every build writes the exact selected routes, per-type coverage, exclusions, sco
 2. Set `CLOUDFLARE_ASSET_TIER=paid` if the build reports more than 20,000 assets.
 3. Add scoped GitHub environment secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
 4. In `config/data-sources.json`, set `productionApproval: true` only after operator/legal review.
-5. Record the required Sol reviews in the release checklist.
-6. Run the manual `Production release` workflow with the confirmation inputs.
+5. Complete `config/legal-release.json` and set its status to `approved` only after the operator disclosures are reviewed.
+6. Record the required Sol reviews in the release checklist.
+7. Run the manual `Production release` workflow with the confirmation inputs.
 
 Pull requests from this repository use `wrangler versions upload --preview-alias pr-<number>`. This creates a Cloudflare Workers preview version without assigning production traffic. Preview builds add global `noindex`, block crawlers through `robots.txt`, verify the complete static artifact, and smoke-test the aliased `workers.dev` URL. Fork and Dependabot pull requests skip deployment while retaining CI and CodeQL checks.
 
@@ -84,7 +85,7 @@ The importer checks required headers, reports non-breaking extra columns, reject
 - MOC images are unrepresentable in the source contract and blocked by path checks.
 - Donor scoring contains no price or value claims.
 - Every derived score and public artifact carries a methodology or release version.
-- The `/legal/` placeholder must be replaced before production.
+- The `/legal/` route is backed by a machine-readable gate and cannot reach production while its disclosure configuration is still a draft.
 
 See [commercialization.md](docs/commercialization.md), [data-sources.md](docs/data-sources.md), and [cloudflare-operations.md](docs/cloudflare-operations.md).
 
