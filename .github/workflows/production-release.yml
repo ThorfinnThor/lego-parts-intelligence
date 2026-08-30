@@ -38,18 +38,18 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       PRODUCTION_RELEASE: '1'
     steps:
-      - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.22.0
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify
       - name: Archive deterministic launch-cohort audit
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: launch-cohort-${{ github.sha }}
           path: artifacts/launch-cohort/
