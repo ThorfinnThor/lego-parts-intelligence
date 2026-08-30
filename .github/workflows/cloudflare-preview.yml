@@ -13,7 +13,11 @@ concurrency:
 
 jobs:
   preview:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    # Cloudflare secrets are intentionally unavailable to forks and Dependabot.
+    # Those pull requests still receive the regular CI and CodeQL checks.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: preview

@@ -32,7 +32,7 @@ GitHub production deployment is manual and protected by an environment. Cloudfla
 
 ## Pull-request previews
 
-The `Cloudflare preview` workflow uploads a Worker version with a stable `pr-<number>` preview alias. `wrangler versions upload` does not promote that version to production traffic. The preview is public on the account's `workers.dev` subdomain, so the generated site carries both a global `noindex` directive and `Disallow: /` in `robots.txt`.
+The `Cloudflare preview` workflow uploads a Worker version with a stable `pr-<number>` preview alias. `wrangler versions upload` does not promote that version to production traffic. The preview is public on the account's `workers.dev` subdomain, so the generated site carries both a global `noindex` directive and `Disallow: /` in `robots.txt`. Fork and Dependabot pull requests skip the deploy job because Cloudflare credentials are not exposed to untrusted automation; they still run the regular CI and CodeQL workflows.
 
 Create a GitHub environment named `preview` without required reviewers and configure:
 
