@@ -20,7 +20,7 @@ jobs:
       APP_BASE_URL: https://example.com
       CLOUDFLARE_ASSET_TIER: free
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
         with:
           version: 11.22.0
