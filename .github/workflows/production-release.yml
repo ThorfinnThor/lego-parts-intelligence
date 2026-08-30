@@ -11,12 +11,12 @@ on:
         description: Type SOL_REVIEW_COMPLETE after the required release audit
         required: true
         type: string
-        asset_tier:
-          description: Cloudflare static asset tier
-          required: true
-          type: choice
-          options: [paid, free]
-          default: free
+      asset_tier:
+        description: Cloudflare static asset tier
+        required: true
+        type: choice
+        options: [free, paid]
+        default: free
 
 permissions:
   contents: read
@@ -46,6 +46,17 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      - name: Check protected production configuration
+        shell: bash
+        run: |
+          if [[ -z "$CLOUDFLARE_API_TOKEN" || -z "$CLOUDFLARE_ACCOUNT_ID" ]]; then
+            echo "Configure CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in the GitHub production environment."
+            exit 1
+          fi
+          if [[ ! "$APP_BASE_URL" =~ ^https:// || "$APP_BASE_URL" == "https://example.com" ]]; then
+            echo "APP_BASE_URL must be the final HTTPS production domain."
+            exit 1
+          fi
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify
       - name: Archive deterministic launch-cohort audit
@@ -57,3 +68,26 @@ jobs:
           retention-days: 90
       - name: Deploy one immutable asset version
         run: pnpm exec wrangler deploy
+      - name: Smoke-test production release
+        shell: bash
+        run: |
+          for attempt in {1..12}; do
+            home="$(curl --fail --silent --show-error --max-time 10 "$APP_BASE_URL/" || true)"
+            legal="$(curl --fail --silent --show-error --max-time 10 "$APP_BASE_URL/legal/" || true)"
+            robots="$(curl --fail --silent --show-error --max-time 10 "$APP_BASE_URL/robots.txt" || true)"
+            sitemap="$(curl --fail --silent --show-error --max-time 10 "$APP_BASE_URL/sitemap.xml" || true)"
+            if [[ "$home" == *"Parts Intelligence"* \
+              && "$legal" == *"Operator-approved disclosure"* \
+              && "$robots" == *"Allow: /"* \
+              && "$sitemap" == *"<sitemapindex"* ]]; then
+              echo "Production smoke test passed: $APP_BASE_URL"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Production release did not pass its smoke contract within 60 seconds. Follow docs/runbooks/release-failed.md."
+          exit 1
+      - name: Publish release URL in job summary
+        run: |
+          echo "## Cloudflare production release" >> "$GITHUB_STEP_SUMMARY"
+          echo "[$APP_BASE_URL]($APP_BASE_URL)" >> "$GITHUB_STEP_SUMMARY"

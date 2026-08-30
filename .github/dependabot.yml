@@ -11,6 +11,18 @@ updates:
       - dependency-name: typescript
         update-types:
           - version-update:semver-major
+      # eslint-plugin-react from the current Next.js config crashes on ESLint 10.
+      # Keep the paired packages on v9 until the upstream plugin supports v10.
+      - dependency-name: eslint
+        update-types:
+          - version-update:semver-major
+      - dependency-name: "@eslint/js"
+        update-types:
+          - version-update:semver-major
+      # Runtime and CI use Node 24; do not type against a newer Node major.
+      - dependency-name: "@types/node"
+        update-types:
+          - version-update:semver-major
     groups:
       development-tooling:
         dependency-type: development
