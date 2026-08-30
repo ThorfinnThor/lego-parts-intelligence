@@ -31,7 +31,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Stream and checksum approved source
         run: pnpm data:download -- --url="${{ inputs.approved_url }}" --name="${{ inputs.filename }}"
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: source-snapshot-${{ github.run_id }}
           path: work/source-snapshots/
