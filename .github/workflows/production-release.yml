@@ -11,12 +11,12 @@ on:
         description: Type SOL_REVIEW_COMPLETE after the required release audit
         required: true
         type: string
-      asset_tier:
-        description: Cloudflare static asset tier
-        required: true
-        type: choice
-        options: [paid, free]
-        default: paid
+        asset_tier:
+          description: Cloudflare static asset tier
+          required: true
+          type: choice
+          options: [paid, free]
+          default: free
 
 permissions:
   contents: read
