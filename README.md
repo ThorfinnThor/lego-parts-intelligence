@@ -52,6 +52,8 @@ Every build writes the exact selected routes, per-type coverage, exclusions, sco
 5. Record the required Sol reviews in the release checklist.
 6. Run the manual `Production release` workflow with the confirmation inputs.
 
+Pull requests from this repository use `wrangler versions upload --preview-alias pr-<number>`. This creates a Cloudflare Workers preview version without assigning production traffic. Preview builds add global `noindex`, block crawlers through `robots.txt`, verify the complete static artifact, and smoke-test the aliased `workers.dev` URL.
+
 The production workflow sets `PRODUCTION_RELEASE=1`; this makes the build fail if the legal gate is closed, the canonical domain is missing, or fewer than 5,000 qualified pages exist.
 
 ## Source import

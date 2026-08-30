@@ -30,6 +30,18 @@ pnpm cf:deploy
 
 GitHub production deployment is manual and protected by an environment. Cloudflare credentials must be account-scoped, stored only as GitHub secrets, and limited to the target account.
 
+## Pull-request previews
+
+The `Cloudflare preview` workflow uploads a Worker version with a stable `pr-<number>` preview alias. `wrangler versions upload` does not promote that version to production traffic. The preview is public on the account's `workers.dev` subdomain, so the generated site carries both a global `noindex` directive and `Disallow: /` in `robots.txt`.
+
+Create a GitHub environment named `preview` without required reviewers and configure:
+
+- secret `CLOUDFLARE_API_TOKEN` scoped to Workers Scripts Edit for the target account;
+- secret `CLOUDFLARE_ACCOUNT_ID`;
+- variable `CLOUDFLARE_WORKERS_SUBDOMAIN`, containing only the account subdomain before `.workers.dev`.
+
+The workflow deliberately skips pull requests from forks because GitHub does not expose deployment secrets to untrusted fork code. Normal CI still verifies those pull requests locally.
+
 ## Atomicity and rollback
 
 Every deploy packages HTML, JSON, search, and sitemaps from one `exportVersion`. Wrangler uploads a new Worker version atomically. List versions with `pnpm exec wrangler versions list`; rollback only to a release whose smoke verification previously passed.

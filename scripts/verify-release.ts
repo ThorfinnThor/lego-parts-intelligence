@@ -18,6 +18,14 @@ for (const file of files) {
 const indexHtml = await readFile(path.join(outDir, 'index.html'), 'utf8');
 if (!indexHtml.includes('Data sourced from Rebrickable.')) throw new Error('Global source attribution missing from rendered HTML.');
 if (!indexHtml.includes('<h1')) throw new Error('Home page lacks a server-rendered H1.');
+const robots = await readFile(path.join(outDir, 'robots.txt'), 'utf8');
+if (process.env.PREVIEW_RELEASE === '1') {
+  if (!indexHtml.includes('name="robots"') || !indexHtml.includes('noindex')) throw new Error('Preview HTML lacks the global noindex directive.');
+  if (!robots.includes('Disallow: /')) throw new Error('Preview robots.txt does not block crawling.');
+} else {
+  if (indexHtml.includes('name="robots"') && indexHtml.includes('noindex')) throw new Error('Production HTML unexpectedly contains noindex.');
+  if (!robots.includes('Allow: /')) throw new Error('Production robots.txt does not allow crawling.');
+}
 
 const manifest = JSON.parse(await readFile(path.join(outDir, 'data', 'manifest.json'), 'utf8')) as PublicManifestV1;
 const cohortConfig = JSON.parse(await readFile(path.join(root, 'config', 'launch-cohort.json'), 'utf8')) as {

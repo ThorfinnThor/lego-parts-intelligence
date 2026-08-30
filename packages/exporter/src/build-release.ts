@@ -858,7 +858,8 @@ async function writeSitemaps(
     '</sitemapindex>',
     '',
   ].join('\n'), 'utf8');
-  await writeFile(path.join(rootDir, 'public', 'robots.txt'), `User-agent: *\nAllow: /\n\nSitemap: ${baseUrl}/sitemap.xml\n`, 'utf8');
+  const robotsPolicy = process.env.PREVIEW_RELEASE === '1' ? 'Disallow: /' : 'Allow: /';
+  await writeFile(path.join(rootDir, 'public', 'robots.txt'), `User-agent: *\n${robotsPolicy}\n\nSitemap: ${baseUrl}/sitemap.xml\n`, 'utf8');
 }
 
 function renderUrlSet(urls: string[], updatedAt: string): string {

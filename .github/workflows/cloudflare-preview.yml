@@ -1,0 +1,68 @@
+name: Cloudflare preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-preview-pr-${{ github.event.number }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: preview
+    env:
+      APP_BASE_URL: https://pr-${{ github.event.number }}-lego-parts-intelligence.${{ vars.CLOUDFLARE_WORKERS_SUBDOMAIN }}.workers.dev
+      CLOUDFLARE_ASSET_TIER: free
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_WORKERS_SUBDOMAIN: ${{ vars.CLOUDFLARE_WORKERS_SUBDOMAIN }}
+      PREVIEW_RELEASE: '1'
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Check Cloudflare preview configuration
+        shell: bash
+        run: |
+          if [[ -z "$CLOUDFLARE_API_TOKEN" || -z "$CLOUDFLARE_ACCOUNT_ID" || -z "$CLOUDFLARE_WORKERS_SUBDOMAIN" ]]; then
+            echo "Configure CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, and CLOUDFLARE_WORKERS_SUBDOMAIN in the GitHub preview environment."
+            exit 1
+          fi
+      - run: pnpm install --frozen-lockfile
+      - name: Verify preview artifact
+        run: pnpm verify
+      - name: Upload version without production deployment
+        run: >-
+          pnpm exec wrangler versions upload
+          --preview-alias "pr-${{ github.event.number }}"
+          --message "PR #${{ github.event.number }} at ${{ github.sha }}"
+      - name: Smoke-test aliased Cloudflare preview
+        shell: bash
+        run: |
+          for attempt in {1..12}; do
+            response="$(curl --fail --silent --show-error --max-time 10 "$APP_BASE_URL/" || true)"
+            if [[ "$response" == *"Parts Intelligence"* && "$response" == *"noindex"* ]]; then
+              echo "Cloudflare preview is ready: $APP_BASE_URL"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Cloudflare preview did not become ready within 60 seconds."
+          exit 1
+      - name: Publish preview URL in job summary
+        run: |
+          echo "## Cloudflare preview" >> "$GITHUB_STEP_SUMMARY"
+          echo "[$APP_BASE_URL]($APP_BASE_URL)" >> "$GITHUB_STEP_SUMMARY"
