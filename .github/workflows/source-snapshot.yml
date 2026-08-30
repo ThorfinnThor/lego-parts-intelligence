@@ -1,0 +1,39 @@
+name: Source snapshot
+
+on:
+  workflow_dispatch:
+    inputs:
+      approved_url:
+        description: Current operator-approved Rebrickable bulk file URL
+        required: true
+        type: string
+      filename:
+        description: Canonical snapshot filename, for example parts.csv.gz
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Stream and checksum approved source
+        run: pnpm data:download -- --url="${{ inputs.approved_url }}" --name="${{ inputs.filename }}"
+      - uses: actions/upload-artifact@v5
+        with:
+          name: source-snapshot-${{ github.run_id }}
+          path: work/source-snapshots/
+          if-no-files-found: error
+          retention-days: 14

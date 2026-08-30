@@ -1,0 +1,13 @@
+{
+  "version": "launch-cohort-v1",
+  "minPages": 5000,
+  "targetPages": 7500,
+  "maxPages": 10000,
+  "pageTypeTargets": {
+    "part": 5500,
+    "donor": 1000,
+    "relationship": 700,
+    "setSupport": 250,
+    "rankingOrMethodology": 50
+  }
+}

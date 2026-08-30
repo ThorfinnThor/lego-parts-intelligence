@@ -1,0 +1,14 @@
+{
+  "source": "rebrickable",
+  "status": "approved_with_conditions",
+  "catalogCommercialUse": true,
+  "bulkDownloads": true,
+  "externalSetPartMinifigImages": true,
+  "mocImages": false,
+  "attributionText": "Data sourced from Rebrickable.",
+  "displayAds": "blocked_pending_terms_context",
+  "affiliateLinks": "blocked_pending_partner_review",
+  "reviewedAt": "2026-08-16",
+  "reviewDueAt": "2026-11-16",
+  "productionApproval": false
+}

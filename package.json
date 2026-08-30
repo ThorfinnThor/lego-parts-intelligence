@@ -1,0 +1,48 @@
+{
+  "name": "lego-parts-intelligence",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Static, source-governed LEGO parts intelligence for Cloudflare Workers Static Assets.",
+  "packageManager": "pnpm@11.22.0",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm data:build && next dev",
+    "build": "pnpm data:build && next build",
+    "data:build": "tsx scripts/build-fixture-release.ts",
+    "data:download": "tsx scripts/download-source.ts",
+    "lint": "eslint .",
+    "typecheck": "next typegen && tsx scripts/clean-next-dev-types.ts && tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "assert:static": "tsx scripts/assert-static-public-routes.ts",
+    "verify:release": "tsx scripts/verify-release.ts",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm assert:static && pnpm build && pnpm verify:release",
+    "cf:dev": "pnpm build && wrangler dev",
+    "cf:dry-run": "pnpm build && wrangler deploy --dry-run",
+    "cf:deploy": "pnpm build && pnpm verify:release && wrangler deploy"
+  },
+  "dependencies": {
+    "csv-parse": "6.1.0",
+    "minisearch": "7.2.0",
+    "next": "16.3.3",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.2",
+    "@types/node": "24.10.0",
+    "@types/react": "19.2.9",
+    "@types/react-dom": "19.2.3",
+    "eslint": "9.39.2",
+    "eslint-config-next": "16.3.3",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.48.1",
+    "vitest": "4.1.11",
+    "wrangler": "4.127.1"
+  }
+}
