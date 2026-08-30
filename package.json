@@ -13,6 +13,7 @@
     "build": "pnpm data:build && next build",
     "data:build": "tsx scripts/build-fixture-release.ts",
     "data:download": "tsx scripts/download-source.ts",
+    "data:validate": "tsx scripts/validate-source-snapshot.ts",
     "lint": "eslint .",
     "typecheck": "next typegen && tsx scripts/clean-next-dev-types.ts && tsc --noEmit",
     "test": "vitest run",

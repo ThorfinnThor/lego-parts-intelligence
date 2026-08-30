@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       filename:
-        description: Canonical snapshot filename, for example parts.csv.gz
+        description: Canonical uncompressed snapshot filename, for example parts.csv
         required: true
         type: string
 

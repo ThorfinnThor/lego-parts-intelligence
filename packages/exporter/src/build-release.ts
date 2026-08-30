@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { parse } from 'csv-parse/sync';
 import {
   dataSourceConfigSchema,
   publicDonorSetSchema,
@@ -18,6 +17,12 @@ import {
 } from '../../data-contracts/src/index';
 import { createStableSlug, shardPrefix } from '../../normalization/src/index';
 import { commonalityScore, roundScore, scoreDonorCandidates } from '../../scoring/src/index';
+import {
+  assertSnapshotDirectory,
+  readSnapshotCsv,
+  readSnapshotLabel,
+  type SourceCsvRow,
+} from '../../rebrickable/src/snapshot';
 import { stableJson } from './stable-json';
 
 interface Category { id: string; name: string; slug: string }
@@ -35,7 +40,7 @@ interface PartStats {
   commonalityScore: number;
   rarityScore: number;
 }
-type CsvRow = Record<string, string>;
+type CsvRow = SourceCsvRow;
 
 const RELATIONSHIP_TYPES: Record<string, string> = {
   A: 'alternate',
@@ -55,24 +60,28 @@ export interface ReleaseSummary {
   files: number;
 }
 
-export async function buildFixtureRelease(rootDir: string): Promise<ReleaseSummary> {
-  const fixtureDir = path.join(rootDir, 'data', 'fixtures');
+export async function buildRelease(rootDir: string): Promise<ReleaseSummary> {
+  const sourceDir = process.env.SOURCE_SNAPSHOT_DIR
+    ? path.resolve(rootDir, process.env.SOURCE_SNAPSHOT_DIR)
+    : path.join(rootDir, 'data', 'fixtures');
   const outputDir = path.join(rootDir, 'public', 'data');
   const sourceConfig = dataSourceConfigSchema.parse(
     JSON.parse(await readFile(path.join(rootDir, 'config', 'data-sources.json'), 'utf8')),
   );
   enforceSourceGate(sourceConfig);
+  await assertSnapshotDirectory(sourceDir);
+  const sourceSnapshot = await readSnapshotLabel(sourceDir);
 
   const [colorRows, categoryRows, themeRows, partRows, setRows, inventoryRows, inventoryPartRows, relationshipRows] =
     await Promise.all([
-      readCsv(fixtureDir, 'colors.csv'),
-      readCsv(fixtureDir, 'part_categories.csv'),
-      readCsv(fixtureDir, 'themes.csv'),
-      readCsv(fixtureDir, 'parts.csv'),
-      readCsv(fixtureDir, 'sets.csv'),
-      readCsv(fixtureDir, 'inventories.csv'),
-      readCsv(fixtureDir, 'inventory_parts.csv'),
-      readCsv(fixtureDir, 'part_relationships.csv'),
+      readSnapshotCsv(sourceDir, 'colors.csv'),
+      readSnapshotCsv(sourceDir, 'part_categories.csv'),
+      readSnapshotCsv(sourceDir, 'themes.csv'),
+      readSnapshotCsv(sourceDir, 'parts.csv'),
+      readSnapshotCsv(sourceDir, 'sets.csv'),
+      readSnapshotCsv(sourceDir, 'inventories.csv'),
+      readSnapshotCsv(sourceDir, 'inventory_parts.csv'),
+      readSnapshotCsv(sourceDir, 'part_relationships.csv'),
     ]);
 
   assertUnique(colorRows, 'id', 'colors');
@@ -212,7 +221,7 @@ export async function buildFixtureRelease(rootDir: string): Promise<ReleaseSumma
     schemaVersion: 1,
     exportVersion,
     source: 'rebrickable',
-    sourceSnapshot: 'fixtures-v1',
+    sourceSnapshot,
     generatedAt: exportVersion,
     methodologies: {
       partStatistics: 'part-stats-v1',
@@ -247,6 +256,9 @@ export async function buildFixtureRelease(rootDir: string): Promise<ReleaseSumma
   };
 }
 
+/** Backwards-compatible fixture entry point used by local tests and previews. */
+export const buildFixtureRelease = buildRelease;
+
 function enforceSourceGate(config: ReturnType<typeof dataSourceConfigSchema.parse>): void {
   if (config.status === 'blocked' || !config.catalogCommercialUse || config.mocImages) {
     throw new Error('Source rights gate blocked this export.');
@@ -254,17 +266,6 @@ function enforceSourceGate(config: ReturnType<typeof dataSourceConfigSchema.pars
   if (process.env.PRODUCTION_RELEASE === '1' && !config.productionApproval) {
     throw new Error('Production release blocked: operator/legal productionApproval is false.');
   }
-}
-
-async function readCsv(directory: string, filename: string): Promise<CsvRow[]> {
-  const content = await readFile(path.join(directory, filename), 'utf8');
-  return parse(content, {
-    bom: true,
-    columns: true,
-    skip_empty_lines: true,
-    relax_column_count: false,
-    trim: true,
-  }) as CsvRow[];
 }
 
 function required(row: CsvRow, key: string): string {
@@ -301,8 +302,14 @@ function assertUnique(rows: CsvRow[], key: string, label: string): void {
 }
 
 function assertAllowedImage(url: string | undefined): void {
-  if (url && /(?:^|\/)mocs?(?:\/|$)/i.test(new URL(url).pathname)) {
-    throw new Error(`MOC images are never exportable: ${url}`);
+  if (!url) return;
+  try {
+    if (/(?:^|\/)mocs?(?:\/|$)/i.test(new URL(url).pathname)) {
+      throw new Error(`MOC images are never exportable: ${url}`);
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('MOC images are never exportable:')) throw error;
+    throw new Error(`Invalid image URL in source snapshot: ${url}`);
   }
 }
 

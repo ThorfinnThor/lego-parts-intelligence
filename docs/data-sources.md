@@ -9,6 +9,8 @@ The implementation assumes, based on the supplied planning material, that offici
 Controls implemented:
 
 - bulk download first; no full-catalogue API pagination;
+- complete snapshot required: `SOURCE_SNAPSHOT_DIR` must contain the eight canonical CSV files before a non-fixture build;
+- required CSV headers are checked at ingest and unexpected columns are logged for operator review;
 - public attribution in the global footer and data-source page;
 - MOC images are blocked by schema and export validation;
 - display ads are blocked pending full terms-context review;

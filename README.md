@@ -2,7 +2,7 @@
 
 A static-first catalogue intelligence product for LEGO parts, designed for commercial operation on Cloudflare with no public runtime database dependency.
 
-The repository currently ships a complete, deterministic fixture release: CSV validation, canonical normalization, part statistics, donor scoring, rights gates, public JSON contracts, static search, accessible page templates, SEO output, and Cloudflare deployment verification. A real public launch remains intentionally blocked until the operator approves the current source terms and supplies an approved Rebrickable bulk snapshot.
+The repository currently ships a complete, deterministic fixture release: CSV validation, canonical normalization, part statistics, donor scoring, rights gates, public JSON contracts, static search, accessible page templates, SEO output, and Cloudflare deployment verification. The same build consumes a complete approved Rebrickable bulk snapshot when `SOURCE_SNAPSHOT_DIR` is set. A real public launch remains intentionally blocked until the operator approves the current source terms and supplies that snapshot.
 
 ## Why this Cloudflare architecture
 
@@ -51,10 +51,21 @@ The production workflow sets `PRODUCTION_RELEASE=1`; this makes the build fail i
 Bulk downloads are preferred over API pagination. The adapter streams a named approved URL to disk, enforces a size limit, retries failures, and writes SHA-256 metadata:
 
 ```bash
-pnpm data:download -- --url=https://approved-source.example/file.csv.gz --name=parts.csv.gz
+pnpm data:download -- --url=https://approved-source.example/file.csv --name=parts.csv --snapshot-dir=work/source-snapshots/rebrickable-v1
 ```
 
 Source URLs are not hard-coded because their current official values and usage terms must be revalidated before ingestion.
+
+Run the downloader once per approved CSV, reusing the same `--snapshot-dir`; its manifest accumulates checksums and source URLs. Compressed archives must be unpacked into the eight canonical CSV filenames before validation.
+
+After all eight expected CSV files have been downloaded into one snapshot directory, validate and build it with:
+
+```bash
+SOURCE_SNAPSHOT_DIR=work/source-snapshots/2026-08-16 pnpm data:validate
+SOURCE_SNAPSHOT_DIR=work/source-snapshots/2026-08-16 pnpm data:build
+```
+
+The importer checks required headers, reports non-breaking extra columns, rejects incomplete snapshots and broken foreign keys, and records the snapshot label in `manifest.json`. It parses files through Node streams; canonical rows are still materialized for deterministic scoring and export.
 
 ## Commercial safeguards
 
