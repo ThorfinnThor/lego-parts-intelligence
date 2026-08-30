@@ -40,6 +40,8 @@ Create a GitHub environment named `preview` without required reviewers and confi
 - secret `CLOUDFLARE_ACCOUNT_ID`;
 - variable `CLOUDFLARE_WORKERS_SUBDOMAIN`, containing only the account subdomain before `.workers.dev`.
 
+Rotate `CLOUDFLARE_API_TOKEN` before its one-year expiry: create the replacement with the same Workers Scripts Edit scope, update both GitHub environments, run an internal preview PR, and revoke the old token only after the smoke test passes.
+
 The workflow deliberately skips pull requests from forks because GitHub does not expose deployment secrets to untrusted fork code. Normal CI still verifies those pull requests locally.
 
 ## Atomicity and rollback
