@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import { ScoreMeter } from '@/components/ui/score-meter';
-import { getDonorData, getPartBySlug, getPartPageParams } from '@/lib/data/static-catalogue';
+import { getDonorData, getPartBySlug, getPartPageParams, isPartPageAvailable, isRelationshipPageAvailable, isSetPageAvailable } from '@/lib/data/static-catalogue';
 
 export const dynamic = 'force-static';
 export const revalidate = false;
@@ -62,7 +62,7 @@ export default async function PartPage({ params }: { params: Promise<{ partSlug:
           <section className="panel">
             <div className="section-heading"><div><p className="eyebrow">Occurrences</p><h2>Top sets</h2></div></div>
             <div className="table-wrap"><table><thead><tr><th>Set</th><th>Year</th><th className="number">Quantity</th></tr></thead><tbody>
-              {part.topSets.map((set) => <tr key={set.id}><td><Link href={`/sets/${set.slug}/`}>{set.name} <small>{set.id}</small></Link></td><td>{set.year ?? '—'}</td><td className="number">{set.quantity}</td></tr>)}
+              {part.topSets.map((set) => <tr key={set.id}><td>{isSetPageAvailable(set.slug) ? <Link href={`/sets/${set.slug}/`}>{set.name} <small>{set.id}</small></Link> : <>{set.name} <small>{set.id}</small></>}</td><td>{set.year ?? '—'}</td><td className="number">{set.quantity}</td></tr>)}
             </tbody></table></div>
           </section>
           <section className="panel">
@@ -73,7 +73,8 @@ export default async function PartPage({ params }: { params: Promise<{ partSlug:
           </section>
           <section className="panel">
             <p className="eyebrow">Source-declared links</p><h2>Relationships</h2>
-            {part.relationships.length ? <ul className="relationship-list">{part.relationships.map((relation) => <li key={`${relation.type}-${relation.targetPartId}`}><span>{relation.type.replaceAll('_', ' ')}</span><Link href={`/parts/${relation.targetSlug}/`}>{relation.targetName} ({relation.targetPartId})</Link></li>)}</ul> : <p>No source-declared relationships are included in this release.</p>}
+            {part.relationships.length ? <ul className="relationship-list">{part.relationships.map((relation) => <li key={`${relation.type}-${relation.targetPartId}`}><span>{relation.type.replaceAll('_', ' ')}</span>{isPartPageAvailable(relation.targetSlug) ? <Link href={`/parts/${relation.targetSlug}/`}>{relation.targetName} ({relation.targetPartId})</Link> : <span>{relation.targetName} ({relation.targetPartId})</span>}</li>)}</ul> : <p>No source-declared relationships are included in this release.</p>}
+            {isRelationshipPageAvailable(part.slug) ? <p><Link className="text-link" href={`/parts/${part.slug}/relationships/`}>Open the relationship methodology view →</Link></p> : null}
           </section>
         </div>
         <aside className="content-aside">

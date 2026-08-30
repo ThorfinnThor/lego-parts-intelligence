@@ -48,5 +48,12 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify
+      - name: Archive deterministic launch-cohort audit
+        uses: actions/upload-artifact@v5
+        with:
+          name: launch-cohort-${{ github.sha }}
+          path: artifacts/launch-cohort/
+          if-no-files-found: error
+          retention-days: 90
       - name: Deploy one immutable asset version
         run: pnpm exec wrangler deploy

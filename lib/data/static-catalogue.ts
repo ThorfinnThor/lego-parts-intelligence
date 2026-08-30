@@ -65,6 +65,22 @@ export function getRanking(slug: string): RankingData | undefined {
   return getRouteMap().rankings[slug] ? readJson<RankingData>('rankings', `${slug}.json`) : undefined;
 }
 
+export function isPartPageAvailable(slug: string): boolean {
+  return getManifest().routes.parts.includes(slug);
+}
+
+export function isSetPageAvailable(slug: string): boolean {
+  return getManifest().routes.sets.includes(slug);
+}
+
+export function getRelationshipPageParams(): Array<{ partSlug: string }> {
+  return getManifest().routes.relationships.map((partSlug) => ({ partSlug }));
+}
+
+export function isRelationshipPageAvailable(slug: string): boolean {
+  return getManifest().routes.relationships.includes(slug);
+}
+
 export function getPartPageParams(): Array<{ partSlug: string }> {
   return getManifest().routes.parts.map((partSlug) => ({ partSlug }));
 }

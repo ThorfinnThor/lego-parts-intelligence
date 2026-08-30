@@ -125,11 +125,13 @@ export interface PublicManifestV1 {
     sets: number;
     partPages: number;
     donorPages: number;
+    relationshipPages: number;
     rankings: number;
   };
   routes: {
     parts: string[];
     donors: string[];
+    relationships: string[];
     sets: string[];
     rankings: string[];
   };

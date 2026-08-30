@@ -13,5 +13,12 @@ describe('fixture to public release', () => {
     expect(second).toEqual(first);
     expect(secondManifest).toEqual(firstManifest);
     expect(second.donorPages).toBeGreaterThan(0);
+    const cohort = JSON.parse(await readFile(path.join(root, 'public', 'data', 'cohort-summary.json'), 'utf8')) as {
+      totalPages: number; byType: { relationship: number }; launchReady: boolean;
+    };
+    const launchPages = JSON.parse(await readFile(path.join(root, 'artifacts', 'launch-cohort', 'launch_pages.json'), 'utf8')) as unknown[];
+    expect(cohort.byType.relationship).toBeGreaterThan(0);
+    expect(launchPages).toHaveLength(cohort.totalPages);
+    expect(cohort.launchReady).toBe(false);
   });
 });

@@ -16,7 +16,15 @@ import {
   type SearchDocumentV1,
 } from '../../data-contracts/src/index';
 import { createStableSlug, shardPrefix } from '../../normalization/src/index';
-import { commonalityScore, roundScore, scoreDonorCandidates } from '../../scoring/src/index';
+import { clamp01, commonalityScore, logNormalize, roundScore, scoreDonorCandidates } from '../../scoring/src/index';
+import {
+  LAUNCH_PAGE_TYPES,
+  selectLaunchCohort,
+  type LaunchCandidate,
+  type LaunchCohortConfig,
+  type LaunchCohortResult,
+  type LaunchPageType,
+} from '../../scoring/src/launch-cohort';
 import {
   assertSnapshotDirectory,
   readSnapshotCsv,
@@ -149,7 +157,7 @@ export async function buildRelease(rootDir: string): Promise<ReleaseSummary> {
   validateReferences({ colors, categories, themes, parts, sets, inventories, inventoryParts, relationships });
   const exportVersion = process.env.RELEASE_TIMESTAMP ?? FIXTURE_TIMESTAMP;
   const stats = derivePartStats(parts, sets, inventories, inventoryParts);
-  const publicParts = buildPublicParts({
+  const allPublicParts = buildPublicParts({
     exportVersion,
     parts,
     categories,
@@ -160,10 +168,42 @@ export async function buildRelease(rootDir: string): Promise<ReleaseSummary> {
     relationships,
     stats,
   });
-  const donorPages = buildDonorPages({ exportVersion, parts, sets, inventories, inventoryParts, stats });
-  const publicSets = buildPublicSets({ exportVersion, sets, themes, parts, inventories, inventoryParts });
-  const rankings = buildRankings(exportVersion, publicParts);
-  const searchDocuments = buildSearchDocuments(publicParts, publicSets);
+  const allDonorPages = buildDonorPages({ exportVersion, parts, sets, inventories, inventoryParts, stats });
+  const allPublicSets = buildPublicSets({ exportVersion, sets, themes, parts, inventories, inventoryParts });
+  const allRankings = buildRankings(exportVersion, allPublicParts);
+  const cohortConfig = parseLaunchCohortConfig(
+    JSON.parse(await readFile(path.join(rootDir, 'config', 'launch-cohort.json'), 'utf8')),
+  );
+  const cohort = selectLaunchCohort(
+    buildLaunchCandidates(allPublicParts, allDonorPages, allPublicSets, allRankings, cohortConfig),
+    cohortConfig,
+  );
+  await writeLaunchArtifacts(rootDir, exportVersion, sourceSnapshot, cohortConfig, cohort);
+  if (process.env.PRODUCTION_RELEASE === '1' && !cohort.launchReady) {
+    throw new Error(`Production launch blocked: only ${cohort.selected.length} qualified pages; ${cohortConfig.minPages} required. Coverage report written to artifacts/launch-cohort/.`);
+  }
+
+  const selectedRoutes = new Set(cohort.selected.map((candidate) => candidate.route));
+  const selectedPartPageSlugs = new Set(
+    cohort.selected.filter((candidate) => candidate.pageType === 'part').map((candidate) => routeEntitySlug(candidate.route, 'parts')),
+  );
+  const selectedRelationshipSlugs = new Set(
+    cohort.selected.filter((candidate) => candidate.pageType === 'relationship').map((candidate) => routeEntitySlug(candidate.route, 'parts')),
+  );
+  const publicParts = allPublicParts
+    .filter((part) => selectedPartPageSlugs.has(part.slug) || selectedRelationshipSlugs.has(part.slug))
+    .map((part) => ({ ...part, indexable: selectedPartPageSlugs.has(part.slug) }));
+  const donorPages = allDonorPages
+    .filter((page) => selectedRoutes.has(`/donor-sets/${page.partSlug}/`))
+    .map((page) => ({ ...page, indexable: true }));
+  const publicSets = allPublicSets.filter((set) => selectedRoutes.has(`/sets/${set.slug}/`));
+  const rankings = allRankings
+    .filter((ranking) => selectedRoutes.has(`/rankings/${ranking.slug}/`))
+    .map((ranking) => ({ ...ranking, rows: ranking.rows.filter((row) => selectedPartPageSlugs.has(row.slug)) }));
+  const searchDocuments = buildSearchDocuments(
+    publicParts.filter((part) => selectedPartPageSlugs.has(part.slug)),
+    publicSets,
+  );
 
   await rm(outputDir, { recursive: true, force: true });
   await mkdir(outputDir, { recursive: true });
@@ -191,29 +231,28 @@ export async function buildRelease(rootDir: string): Promise<ReleaseSummary> {
     rankings: Object.fromEntries(rankings.map((ranking) => [ranking.slug, { id: ranking.slug }])),
   }));
 
-  const launchCandidates = [
-    ...publicParts.filter((part) => part.indexable).map((part) => ({ type: 'part', slug: part.slug })),
-    ...donorPages.filter((page) => page.indexable).map((page) => ({ type: 'donor', slug: page.partSlug })),
-    ...rankings.map((ranking) => ({ type: 'ranking', slug: ranking.slug })),
-  ].sort((left, right) => left.type.localeCompare(right.type) || left.slug.localeCompare(right.slug));
-  const cohortConfig = JSON.parse(await readFile(path.join(rootDir, 'config', 'launch-cohort.json'), 'utf8')) as {
-    version: string; minPages: number; targetPages: number; maxPages: number;
-  };
-  const selected = launchCandidates.slice(0, cohortConfig.maxPages);
-  if (process.env.PRODUCTION_RELEASE === '1' && selected.length < cohortConfig.minPages) {
-    throw new Error(`Production launch blocked: only ${selected.length} qualified pages; ${cohortConfig.minPages} required.`);
-  }
-  writtenFiles.push(await writeJson(outputDir, 'cohort-summary.json', {
+  const cohortSummary = {
     version: cohortConfig.version,
-    totalPages: selected.length,
+    totalPages: cohort.selected.length,
+    minPages: cohortConfig.minPages,
     targetPages: cohortConfig.targetPages,
-    launchReady: selected.length >= cohortConfig.minPages,
+    maxPages: cohortConfig.maxPages,
+    byType: Object.fromEntries(LAUNCH_PAGE_TYPES.map((type) => [type, cohort.byType[type].selected])),
+    coverage: cohort.byType,
+    launchReady: cohort.launchReady,
     mode: process.env.PRODUCTION_RELEASE === '1' ? 'production' : 'fixture-preview',
     sourceRelease: exportVersion,
+    sourceSnapshot,
     indexabilityMethodology: 'indexability-v1',
-  }));
+  };
+  writtenFiles.push(await writeJson(outputDir, 'cohort-summary.json', cohortSummary));
+  writtenFiles.push(await writeJson(outputDir, 'launch-pages.json', cohort.selected.map((candidate) => ({
+    pageType: candidate.pageType,
+    route: candidate.route,
+    launchPriorityScore: candidate.launchPriorityScore,
+  }))));
 
-  await writeSitemaps(rootDir, exportVersion, selected, publicSets);
+  await writeSitemaps(rootDir, exportVersion, cohort.selected);
   const checksums = Object.fromEntries(
     await Promise.all(writtenFiles.sort().map(async (relative) => [relative, await checksum(path.join(outputDir, relative))])),
   );
@@ -229,15 +268,17 @@ export async function buildRelease(rootDir: string): Promise<ReleaseSummary> {
       indexability: 'indexability-v1',
     },
     counts: {
-      parts: publicParts.length,
-      sets: publicSets.length,
-      partPages: publicParts.filter((part) => part.indexable).length,
-      donorPages: donorPages.filter((page) => page.indexable).length,
+      parts: allPublicParts.length,
+      sets: allPublicSets.length,
+      partPages: selectedPartPageSlugs.size,
+      donorPages: donorPages.length,
+      relationshipPages: selectedRelationshipSlugs.size,
       rankings: rankings.length,
     },
     routes: {
-      parts: publicParts.map((part) => part.slug).sort(),
+      parts: [...selectedPartPageSlugs].sort(),
       donors: donorPages.filter((page) => page.indexable).map((page) => page.partSlug).sort(),
+      relationships: [...selectedRelationshipSlugs].sort(),
       sets: publicSets.map((set) => set.slug).sort(),
       rankings: rankings.map((ranking) => ranking.slug).sort(),
     },
@@ -248,9 +289,9 @@ export async function buildRelease(rootDir: string): Promise<ReleaseSummary> {
 
   return {
     exportVersion,
-    parts: publicParts.length,
-    sets: publicSets.length,
-    indexablePages: selected.length,
+    parts: allPublicParts.length,
+    sets: allPublicSets.length,
+    indexablePages: cohort.selected.length,
     donorPages: manifest.counts.donorPages,
     files: (await listFiles(outputDir)).length,
   };
@@ -553,6 +594,227 @@ function buildSearchDocuments(parts: PublicPartDetailV1[], sets: PublicSetDetail
   ].sort((left, right) => left.type.localeCompare(right.type) || left.id.localeCompare(right.id));
 }
 
+function parseLaunchCohortConfig(value: unknown): LaunchCohortConfig {
+  if (!value || typeof value !== 'object') throw new Error('Invalid launch cohort configuration.');
+  const raw = value as Record<string, unknown>;
+  const targets = raw.pageTypeTargets;
+  if (!targets || typeof targets !== 'object') throw new Error('Launch cohort pageTypeTargets are required.');
+  const pageTypeTargets = targets as Record<string, unknown>;
+  return {
+    version: requiredConfigString(raw, 'version'),
+    minPages: requiredConfigInteger(raw, 'minPages'),
+    targetPages: requiredConfigInteger(raw, 'targetPages'),
+    maxPages: requiredConfigInteger(raw, 'maxPages'),
+    pageTypeTargets: {
+      part: requiredConfigInteger(pageTypeTargets, 'part'),
+      donor: requiredConfigInteger(pageTypeTargets, 'donor'),
+      relationship: requiredConfigInteger(pageTypeTargets, 'relationship'),
+      set_support: requiredConfigInteger(pageTypeTargets, 'setSupport'),
+      ranking_or_methodology: requiredConfigInteger(pageTypeTargets, 'rankingOrMethodology'),
+    },
+  };
+}
+
+function requiredConfigString(value: Record<string, unknown>, key: string): string {
+  const field = value[key];
+  if (typeof field !== 'string' || !field.trim()) throw new Error(`Invalid launch cohort string: ${key}`);
+  return field;
+}
+
+function requiredConfigInteger(value: Record<string, unknown>, key: string): number {
+  const field = value[key];
+  if (!Number.isInteger(field) || Number(field) < 0) throw new Error(`Invalid launch cohort integer: ${key}`);
+  return Number(field);
+}
+
+function buildLaunchCandidates(
+  parts: PublicPartDetailV1[],
+  donors: PublicDonorSetV1[],
+  sets: PublicSetDetailV1[],
+  rankings: ReturnType<typeof buildRankings>,
+  config: LaunchCohortConfig,
+): LaunchCandidate[] {
+  const partBySlug = new Map(parts.map((part) => [part.slug, part]));
+  const partOccurrences = parts.map((part) => part.statistics.setCount);
+  const setSizes = sets.map((set) => set.totalParts);
+  const targetTotal = Object.values(config.pageTypeTargets).reduce((sum, value) => sum + value, 0);
+
+  const partCandidates = parts.map((part): LaunchCandidate => ({
+    pageType: 'part',
+    route: `/parts/${part.slug}/`,
+    qualified: part.indexable,
+    hardBlockReasons: part.indexable ? [] : ['part_indexability_gate'],
+    components: {
+      relationshipDepth: clamp01(part.relationships.length / 5),
+      occurrenceDepth: logNormalize(part.statistics.setCount, partOccurrences),
+      derivedInsightCount: clamp01([
+        part.topColors.length > 0,
+        part.topSets.length > 0,
+        part.relationships.length > 0,
+        part.statistics.setCount > 0,
+        part.years.first !== undefined,
+      ].filter(Boolean).length / 5),
+      internalLinkValue: clamp01((part.topSets.length + part.relationships.length) / 20),
+      metadataCompleteness: clamp01([
+        Boolean(part.category),
+        Boolean(part.image),
+        part.years.first !== undefined,
+        part.years.last !== undefined,
+        Boolean(part.name && part.id),
+      ].filter(Boolean).length / 5),
+    },
+  }));
+
+  const donorCandidates = donors.map((donor): LaunchCandidate => {
+    const part = partBySlug.get(donor.partSlug);
+    return {
+      pageType: 'donor',
+      route: `/donor-sets/${donor.partSlug}/`,
+      qualified: donor.indexable,
+      hardBlockReasons: donor.indexable ? [] : ['donor_indexability_gate'],
+      components: {
+        relationshipDepth: clamp01((part?.relationships.length ?? 0) / 5),
+        occurrenceDepth: part?.statistics.commonalityScore ?? 0,
+        derivedInsightCount: clamp01(donor.candidates.length / 10),
+        internalLinkValue: clamp01(donor.candidates.length / 10),
+        metadataCompleteness: part ? 1 : 0.5,
+      },
+    };
+  });
+
+  const relationshipCandidates = parts.map((part): LaunchCandidate => {
+    const qualified = part.indexable && part.relationships.length > 0;
+    return {
+      pageType: 'relationship',
+      route: `/parts/${part.slug}/relationships/`,
+      qualified,
+      hardBlockReasons: qualified ? [] : ['relationship_depth_gate'],
+      components: {
+        relationshipDepth: clamp01(part.relationships.length / 5),
+        occurrenceDepth: part.statistics.commonalityScore ?? 0,
+        derivedInsightCount: clamp01(new Set(part.relationships.map((relation) => relation.type)).size / 3),
+        internalLinkValue: clamp01(part.relationships.length / 10),
+        metadataCompleteness: clamp01([Boolean(part.category), Boolean(part.name), Boolean(part.id), part.years.first !== undefined].filter(Boolean).length / 4),
+      },
+    };
+  });
+
+  const setCandidates = sets.map((set): LaunchCandidate => {
+    const qualified = set.totalParts > 0 && set.parts.length >= 2;
+    const relatedPartCount = set.parts.filter((item) => (partBySlug.get(item.slug)?.relationships.length ?? 0) > 0).length;
+    return {
+      pageType: 'set_support',
+      route: `/sets/${set.slug}/`,
+      qualified,
+      hardBlockReasons: qualified ? [] : ['set_support_depth_gate'],
+      components: {
+        relationshipDepth: clamp01(relatedPartCount / Math.max(set.parts.length, 1)),
+        occurrenceDepth: logNormalize(set.totalParts, setSizes),
+        derivedInsightCount: clamp01([Boolean(set.theme), set.year !== undefined, set.parts.length >= 3].filter(Boolean).length / 3),
+        internalLinkValue: clamp01(set.parts.length / 20),
+        metadataCompleteness: clamp01([Boolean(set.id), Boolean(set.name), Boolean(set.theme), set.year !== undefined].filter(Boolean).length / 4),
+      },
+    };
+  });
+
+  const rankingCandidates = rankings.map((ranking): LaunchCandidate => {
+    const qualified = ranking.rows.length >= 3;
+    return {
+      pageType: 'ranking_or_methodology',
+      route: `/rankings/${ranking.slug}/`,
+      qualified,
+      hardBlockReasons: qualified ? [] : ['ranking_depth_gate'],
+      components: {
+        relationshipDepth: 0,
+        occurrenceDepth: clamp01(ranking.rows.length / 50),
+        derivedInsightCount: clamp01(ranking.rows.length / 20),
+        internalLinkValue: clamp01(ranking.rows.length / 20),
+        metadataCompleteness: 1,
+      },
+    };
+  });
+
+  const methodologyCandidates = [
+    '/methodology/data-sources/',
+    '/methodology/donor-score/',
+    '/methodology/rarity/',
+  ].map((route): LaunchCandidate => ({
+    pageType: 'ranking_or_methodology',
+    route,
+    qualified: true,
+    hardBlockReasons: [],
+    components: {
+      relationshipDepth: 0,
+      occurrenceDepth: 0.25,
+      derivedInsightCount: 1,
+      internalLinkValue: 0.75,
+      metadataCompleteness: 1,
+    },
+  }));
+
+  if (targetTotal > config.maxPages) throw new Error('Launch page-type targets exceed the configured maximum.');
+  return [...partCandidates, ...donorCandidates, ...relationshipCandidates, ...setCandidates, ...rankingCandidates, ...methodologyCandidates];
+}
+
+function routeEntitySlug(route: string, prefix: string): string {
+  const segments = route.split('/').filter(Boolean);
+  if (segments[0] !== prefix || !segments[1]) throw new Error(`Cannot extract ${prefix} entity slug from ${route}`);
+  return segments[1];
+}
+
+async function writeLaunchArtifacts(
+  rootDir: string,
+  exportVersion: string,
+  sourceSnapshot: string,
+  config: LaunchCohortConfig,
+  cohort: LaunchCohortResult,
+): Promise<void> {
+  const artifactDir = path.join(rootDir, 'artifacts', 'launch-cohort');
+  await rm(artifactDir, { recursive: true, force: true });
+  await mkdir(artifactDir, { recursive: true });
+  const pageView = (candidate: LaunchCohortResult['selected'][number]) => ({
+    pageType: candidate.pageType,
+    route: candidate.route,
+    launchPriorityScore: candidate.launchPriorityScore,
+    pageTypeDiversityBonus: candidate.pageTypeDiversityBonus,
+    components: candidate.components,
+  });
+  await writeJson(artifactDir, 'launch_pages.json', cohort.selected.map(pageView));
+  await writeJson(artifactDir, 'launch_pages_by_type.json', Object.fromEntries(
+    LAUNCH_PAGE_TYPES.map((type) => [type, cohort.selected.filter((item) => item.pageType === type).map(pageView)]),
+  ));
+  await writeJson(artifactDir, 'excluded_candidates.json', cohort.excluded.map((candidate) => ({
+    ...pageView(candidate),
+    exclusionReason: candidate.exclusionReason,
+    hardBlockReasons: candidate.hardBlockReasons,
+  })));
+  await writeJson(artifactDir, 'cohort_summary.json', {
+    version: config.version,
+    exportVersion,
+    sourceSnapshot,
+    totalPages: cohort.selected.length,
+    minPages: config.minPages,
+    targetPages: config.targetPages,
+    maxPages: config.maxPages,
+    launchReady: cohort.launchReady,
+    coverage: cohort.byType,
+  });
+  await writeJson(artifactDir, 'methodology.json', {
+    version: config.version,
+    deterministicTieBreak: 'canonical_route_ascending',
+    quotaPolicy: 'fill_page_type_targets_then_reallocate_to_highest_qualified_score_until_target',
+    hardBlocksOverrideQuota: true,
+    weights: {
+      relationshipDepth: 0.3,
+      occurrenceDepth: 0.25,
+      derivedInsightCount: 0.15,
+      internalLinkValue: 0.15,
+      metadataCompleteness: 0.1,
+      pageTypeDiversityBonus: 0.05,
+    },
+  });
+}
+
 async function writeJson(outputDir: string, relativePath: string, value: unknown): Promise<string> {
   const destination = path.join(outputDir, relativePath);
   await mkdir(path.dirname(destination), { recursive: true });
@@ -563,8 +825,7 @@ async function writeJson(outputDir: string, relativePath: string, value: unknown
 async function writeSitemaps(
   rootDir: string,
   updatedAt: string,
-  selected: Array<{ type: string; slug: string }>,
-  sets: PublicSetDetailV1[],
+  selected: LaunchCohortResult['selected'],
 ): Promise<void> {
   const baseUrl = (process.env.APP_BASE_URL ?? 'https://example.com').replace(/\/$/, '');
   if (process.env.PRODUCTION_RELEASE === '1' && baseUrl === 'https://example.com') {
@@ -573,16 +834,27 @@ async function writeSitemaps(
   const sitemapDir = path.join(rootDir, 'public', 'sitemaps');
   await rm(sitemapDir, { recursive: true, force: true });
   await mkdir(sitemapDir, { recursive: true });
-  const urls = selected.map((item) => {
-    const prefix = item.type === 'part' ? 'parts' : item.type === 'donor' ? 'donor-sets' : 'rankings';
-    return `${baseUrl}/${prefix}/${item.slug}/`;
-  });
-  const supportUrls = sets.map((set) => `${baseUrl}/sets/${set.slug}/`);
-  await writeFile(path.join(sitemapDir, 'catalogue-1.xml'), renderUrlSet([...urls, ...supportUrls], updatedAt), 'utf8');
+  const filenames: Record<LaunchPageType, string> = {
+    part: 'parts.xml',
+    donor: 'donor-sets.xml',
+    relationship: 'relationships.xml',
+    set_support: 'set-support.xml',
+    ranking_or_methodology: 'rankings-and-methodology.xml',
+  };
+  const segments: Array<{ filename: string; count: number }> = [];
+  for (const pageType of LAUNCH_PAGE_TYPES) {
+    const urls = selected
+      .filter((item) => item.pageType === pageType)
+      .map((item) => `${baseUrl}${item.route}`);
+    if (urls.length === 0) continue;
+    const filename = filenames[pageType];
+    await writeFile(path.join(sitemapDir, filename), renderUrlSet(urls, updatedAt), 'utf8');
+    segments.push({ filename, count: urls.length });
+  }
   await writeFile(path.join(rootDir, 'public', 'sitemap.xml'), [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-    `  <sitemap><loc>${escapeXml(baseUrl)}/sitemaps/catalogue-1.xml</loc><lastmod>${updatedAt.slice(0, 10)}</lastmod></sitemap>`,
+    ...segments.map((segment) => `  <sitemap><loc>${escapeXml(baseUrl)}/sitemaps/${segment.filename}</loc><lastmod>${updatedAt.slice(0, 10)}</lastmod></sitemap>`),
     '</sitemapindex>',
     '',
   ].join('\n'), 'utf8');

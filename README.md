@@ -35,6 +35,12 @@ pnpm cf:dry-run
 
 `pnpm verify` runs lint, strict TypeScript, unit/contract/integration tests, the public static-route scanner, a full static build, public contract checks, and Cloudflare asset-limit checks.
 
+## Deterministic launch cohort
+
+`config/launch-cohort.json` defines the 5,000-page minimum, 7,500-page target, 10,000-page ceiling, and page-type targets. The exporter scores only already-qualified part, donor, relationship, set-support, ranking, and methodology pages. Hard-blocked pages never fill a quota; unused quota is reassigned to the highest-scoring qualified candidates.
+
+Every build writes the exact selected routes, per-type coverage, exclusions, scores, and methodology to `artifacts/launch-cohort/`. Production CI retains this audit for 90 days. Only selected dynamic routes are rendered, searched, internally linked, and emitted into segmented sitemaps, which keeps indexable-page and Cloudflare asset growth bounded.
+
 ## Cloudflare deployment
 
 1. Set `APP_BASE_URL` to the production custom domain.
