@@ -2,6 +2,8 @@
 
 A static-first catalogue intelligence product for LEGO parts, designed for commercial operation on Cloudflare with no public runtime database dependency.
 
+Hosting policy: **Cloudflare only**. Preview and production deployments use Cloudflare Workers Static Assets through Wrangler; the repository contains no alternative hosting deployment path.
+
 The repository currently ships a complete, deterministic fixture release: CSV validation, canonical normalization, part statistics, donor scoring, rights gates, public JSON contracts, static search, accessible page templates, SEO output, and Cloudflare deployment verification. The same build consumes a complete approved Rebrickable bulk snapshot when `SOURCE_SNAPSHOT_DIR` is set. A real public launch remains intentionally blocked until the operator approves the current source terms and supplies that snapshot.
 
 ## Why this Cloudflare architecture
