@@ -22,6 +22,8 @@ The differentiator is not another searchable parts list. It is transparent parts
 - build time, asset count, and operator hours/month;
 - gross contribution after hosting, data licenses, and partner fees.
 
+`pnpm report:readiness` produces the machine-readable and Markdown launch-gate report used by the release workflow. Cloudflare Web Analytics should be enabled through automatic injection only after the final proxied production hostname exists; this preserves the current CSP and avoids a manually embedded third-party script. Cloudflare Web Analytics does not currently provide custom product events, so donor, relationship, search, and affiliate intent metrics need a separately approved event design before implementation.
+
 ## Product and legal gates
 
 - No market-price, availability, or “best value” language without a licensed provider.

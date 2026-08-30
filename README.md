@@ -37,6 +37,8 @@ pnpm cf:dry-run
 
 `pnpm verify` runs lint, strict TypeScript, unit/contract/integration tests, the public static-route scanner, a full static build, public contract checks, and Cloudflare asset-limit checks.
 
+It also writes `artifacts/release-readiness/report.md` and `report.json`, combining the canonical-domain, legal, source-review, monetization, launch-cohort, static-runtime, and Cloudflare free-tier gates into one operator report. Blocked production prerequisites are expected in fixture and preview builds; the protected production workflow enforces them.
+
 ## Deterministic launch cohort
 
 `config/launch-cohort.json` defines the 5,000-page minimum, 7,500-page target, 10,000-page ceiling, and page-type targets. The exporter scores only already-qualified part, donor, relationship, set-support, ranking, and methodology pages. Hard-blocked pages never fill a quota; unused quota is reassigned to the highest-scoring qualified candidates.

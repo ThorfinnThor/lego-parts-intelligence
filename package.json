@@ -20,7 +20,8 @@
     "test:watch": "vitest",
     "assert:static": "tsx scripts/assert-static-public-routes.ts",
     "verify:release": "tsx scripts/verify-release.ts",
-    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm assert:static && pnpm build && pnpm verify:release",
+    "report:readiness": "tsx scripts/release-readiness.ts",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm assert:static && pnpm build && pnpm verify:release && pnpm report:readiness",
     "cf:dev": "pnpm build && wrangler dev",
     "cf:dry-run": "pnpm build && wrangler deploy --dry-run",
     "cf:deploy": "pnpm build && pnpm verify:release && wrangler deploy"
