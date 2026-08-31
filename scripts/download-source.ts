@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { dataSourceConfigSchema } from '../packages/data-contracts/src/index';
 import { downloadSnapshotFile } from '../packages/rebrickable/src/download';
 import { SNAPSHOT_FILES } from '../packages/rebrickable/src/snapshot';
 import { stableJson } from '../packages/exporter/src/stable-json';
@@ -17,8 +18,11 @@ if (!(SNAPSHOT_FILES as readonly string[]).includes(nameValue)) {
 const retrievedAt = new Date().toISOString();
 const snapshotDir = path.resolve(process.cwd(), snapshotDirValue ?? path.join('work', 'source-snapshots', retrievedAt.replace(/[:.]/g, '-')));
 await mkdir(snapshotDir, { recursive: true });
+const sourceConfig = dataSourceConfigSchema.parse(
+  JSON.parse(await readFile(path.resolve(process.cwd(), 'config', 'data-sources.json'), 'utf8')),
+);
 const file = await downloadSnapshotFile({ url: new URL(urlValue), filename: nameValue, snapshotDir });
-let existing: { files?: typeof file[]; snapshotId?: string } = {};
+let existing: { files?: typeof file[]; snapshotId?: string; retrievedAt?: string } = {};
 try {
   existing = JSON.parse(await readFile(path.join(snapshotDir, 'manifest.json'), 'utf8')) as typeof existing;
 } catch {
@@ -28,9 +32,9 @@ const files = [...(existing.files ?? []).filter((item) => item.name !== file.nam
 const manifest = {
   source: 'rebrickable',
   snapshotId: existing.snapshotId ?? path.basename(snapshotDir),
-  retrievedAt,
+  retrievedAt: existing.retrievedAt ?? retrievedAt,
   files,
-  termsReviewVersion: '2026-08-16',
+  termsReviewVersion: sourceConfig.reviewedAt,
 };
 await writeFile(path.join(snapshotDir, 'manifest.json'), stableJson(manifest), 'utf8');
 console.log(JSON.stringify({ event: 'source_snapshot_downloaded', snapshotDir, ...file }));
