@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { getAllMinifigs, getAllParts, getManifest } from '@/lib/data/static-catalogue';
+import { getAllMinifigs, getAllParts, getAllSets, getManifest } from '@/lib/data/static-catalogue';
 import { pluralize } from '@/lib/format';
 
 export const dynamic = 'force-static';
@@ -9,6 +9,7 @@ export default function HomePage() {
   const manifest = getManifest();
   const featured = getAllParts().filter((part) => part.indexable).slice(0, 3);
   const featuredMinifigs = getAllMinifigs().slice(0, 3);
+  const featuredSets = getAllSets().slice(0, 3);
   return (
     <>
       <section className="hero shell">
@@ -54,6 +55,23 @@ export default function HomePage() {
               <h3><Link href={`/minifigs/${minifig.slug}/`}>{minifig.name}</Link></h3>
               <p>{pluralize(minifig.statistics.setCount, 'set')} · {pluralize(minifig.statistics.componentPartCount, 'component unit')}</p>
               <Link className="text-link" href={`/minifigs/${minifig.slug}/`}>Open minifigure record</Link>
+            </article>
+          ))}
+        </div>
+      </section> : null}
+      {featuredSets.length > 0 ? <section className="shell section">
+        <div className="section-heading">
+          <div><p className="eyebrow">Support-set intelligence</p><h2>Sets in this release</h2></div>
+          <Link href="/sets/">View all sets →</Link>
+        </div>
+        <div className="card-grid">
+          {featuredSets.map((set) => (
+            <article className="part-card" key={set.id}>
+              <div className="part-id">{set.id}</div>
+              <h3><Link href={`/sets/${set.slug}/`}>{set.name}</Link></h3>
+              <p>{set.year ?? 'Unknown year'} · {set.theme ?? 'Unknown theme'}</p>
+              <p>{pluralize(set.totalParts, 'documented part unit')} · {pluralize(set.totalMinifigs, 'minifigure')}</p>
+              <Link className="text-link" href={`/sets/${set.slug}/`}>Open set inventory</Link>
             </article>
           ))}
         </div>
