@@ -13,7 +13,7 @@ Current platform budget (revalidate before production):
 | Static asset requests | free/unlimited | free/unlimited | no Worker script |
 | Worker requests | not used | not used | no `main` property |
 
-The build reports both asset count and ceiling utilization. Use the paid ceiling for the full 7,500-page cohort if free utilization would exceed 90%; operating at the exact limit leaves no room for Next.js framework files or rollback growth.
+The build reports both asset count and ceiling utilization. The initial 250–500 page indexation cohort should remain comfortably below the free ceiling; use the paid ceiling only after a measured expansion if asset utilization would exceed 90%. Operating at the exact limit leaves no room for Next.js framework files or rollback growth.
 
 The launch selector limits generated dynamic HTML to the selected cohort and emits separate `parts`, `donor-sets`, `relationships`, `set-support`, and `rankings-and-methodology` sitemap segments. JSON is emitted only for selected pages or records required by a selected relationship page. This makes the asset-limit check reflect the actual launch portfolio instead of the entire source catalogue.
 

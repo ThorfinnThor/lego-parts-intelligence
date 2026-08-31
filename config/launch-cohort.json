@@ -1,14 +1,14 @@
 {
-  "version": "launch-cohort-v1",
-  "minPages": 5000,
-  "targetPages": 7500,
-  "maxPages": 10000,
+  "version": "launch-cohort-v2-progressive",
+  "minPages": 250,
+  "targetPages": 500,
+  "maxPages": 750,
   "pageTypeTargets": {
-    "part": 5000,
-    "donor": 1000,
-    "relationship": 700,
-    "setSupport": 250,
-    "minifig": 500,
-    "rankingOrMethodology": 50
+    "part": 250,
+    "donor": 50,
+    "relationship": 25,
+    "setSupport": 75,
+    "minifig": 75,
+    "rankingOrMethodology": 10
   }
 }

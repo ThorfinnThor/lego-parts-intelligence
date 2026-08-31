@@ -25,7 +25,7 @@ const readyInput: ReadinessInput = {
     approvedBy: 'Legal owner',
     commercialization: { displayAds: false, affiliateLinks: false },
   },
-  launch: { totalPages: 7_500, minPages: 5_000, targetPages: 7_500 },
+  launch: { totalPages: 500, minPages: 250, targetPages: 500 },
   assets: { count: 9_000, freeLimit: 20_000 },
   staticRuntime: true,
   requestedMonetization: { displayAds: false, affiliateLinks: false },
@@ -41,7 +41,7 @@ describe('release readiness', () => {
     const checks = evaluateReleaseReadiness({
       ...readyInput,
       appBaseUrl: 'https://example.com',
-      launch: { totalPages: 23, minPages: 5_000, targetPages: 7_500 },
+      launch: { totalPages: 23, minPages: 250, targetPages: 500 },
     });
     expect(checks.find((check) => check.id === 'production-domain')?.status).toBe('blocked');
     expect(checks.find((check) => check.id === 'launch-cohort')?.status).toBe('blocked');

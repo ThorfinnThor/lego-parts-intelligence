@@ -14,6 +14,6 @@ Require Sol High review before production for:
 - static export integrity, determinism, and secret exclusion;
 - zero-runtime-database public data contract;
 - atomic deploy/rollback behavior;
-- final 5,000–10,000 page cohort and thin-content audit.
+- final progressive indexation cohort and thin-content audit before any expansion.
 
 Routine work currently remaining—real snapshot field mapping, adding page templates under established contracts, and CI maintenance—is suitable for Luna. Methodology changes or production release audits should use Sol.
