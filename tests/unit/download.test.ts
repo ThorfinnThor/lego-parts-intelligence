@@ -1,5 +1,6 @@
+import { gzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
-import { assertApprovedSourceUrl } from '../../packages/rebrickable/src/download';
+import { assertApprovedSourceUrl, decodeSourceBody } from '../../packages/rebrickable/src/download';
 
 describe('source download boundary', () => {
   it.each([
@@ -16,5 +17,19 @@ describe('source download boundary', () => {
     'https://rebrickable.com:8443/parts.csv',
   ])('rejects an unsafe source URL: %s', (value) => {
     expect(() => assertApprovedSourceUrl(new URL(value))).toThrow(/approved Rebrickable host/);
+  });
+
+  it('streams official gzip downloads into canonical CSV bytes', async () => {
+    const compressed = gzipSync('id,name\n1,Black\n');
+    const input = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(compressed);
+        controller.close();
+      },
+    });
+    const decoded = decodeSourceBody(new URL('https://cdn.rebrickable.com/media/downloads/colors.csv.gz'), input);
+
+    expect(decoded.sourceCompression).toBe('gzip');
+    await expect(new Response(decoded.body).text()).resolves.toBe('id,name\n1,Black\n');
   });
 });

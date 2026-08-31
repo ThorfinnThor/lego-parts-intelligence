@@ -54,4 +54,24 @@ describe('GitHub Actions contracts', () => {
       options: ['free', 'paid'],
     });
   });
+
+  it('collects one complete eight-file source snapshot per run', async () => {
+    const workflow = parse(
+      await readFile(path.join(workflowDirectory, 'source-snapshot.yml'), 'utf8'),
+    ) as Workflow;
+    const inputNames = Object.keys(workflow.on?.workflow_dispatch?.inputs ?? {}).sort();
+
+    expect(inputNames).toEqual([
+      'colors_url',
+      'confirm_source_review',
+      'inventories_url',
+      'inventory_parts_url',
+      'part_categories_url',
+      'part_relationships_url',
+      'parts_url',
+      'sets_url',
+      'snapshot_id',
+      'themes_url',
+    ]);
+  });
 });

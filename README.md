@@ -69,7 +69,9 @@ pnpm data:download -- --url=https://approved-source.example/file.csv --name=part
 
 Source URLs are not hard-coded because their current official values and usage terms must be revalidated before ingestion.
 
-Run the downloader once per approved CSV, reusing the same `--snapshot-dir`; its manifest accumulates checksums and source URLs. Compressed archives must be unpacked into the eight canonical CSV filenames before validation.
+Run the downloader once per approved CSV, reusing the same `--snapshot-dir`; its manifest accumulates checksums and source URLs. A URL ending in `.gz` is streamed directly into the requested canonical CSV filename and checksummed after decompression.
+
+The manual `Source snapshot` workflow accepts all eight approved `.csv` or `.csv.gz` URLs in one gated run, validates the complete snapshot, and archives it as one short-lived artifact.
 
 After all eight expected CSV files have been downloaded into one snapshot directory, validate and build it with:
 
