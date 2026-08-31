@@ -23,7 +23,7 @@ const config: LaunchCohortConfig = {
   minPages: 4,
   targetPages: 5,
   maxPages: 6,
-  pageTypeTargets: { part: 2, donor: 2, relationship: 1, set_support: 0, ranking_or_methodology: 0 },
+  pageTypeTargets: { part: 2, donor: 2, relationship: 1, set_support: 0, minifig: 0, ranking_or_methodology: 0 },
 };
 
 describe('launch cohort selector', () => {

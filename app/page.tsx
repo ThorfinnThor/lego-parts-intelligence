@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { getAllParts, getManifest } from '@/lib/data/static-catalogue';
+import { getAllMinifigs, getAllParts, getManifest } from '@/lib/data/static-catalogue';
 import { pluralize } from '@/lib/format';
 
 export const dynamic = 'force-static';
@@ -8,6 +8,7 @@ export const revalidate = false;
 export default function HomePage() {
   const manifest = getManifest();
   const featured = getAllParts().filter((part) => part.indexable).slice(0, 3);
+  const featuredMinifigs = getAllMinifigs().slice(0, 3);
   return (
     <>
       <section className="hero shell">
@@ -21,12 +22,13 @@ export default function HomePage() {
         <div className="release-note" aria-label="Release details">
           <span><strong>{manifest.counts.parts}</strong> {manifest.counts.parts === 1 ? 'part' : 'parts'} in this build</span>
           <span><strong>{manifest.counts.sets}</strong> support {manifest.counts.sets === 1 ? 'set' : 'sets'}</span>
+          <span><strong>{manifest.counts.minifigs}</strong> {manifest.counts.minifigs === 1 ? 'minifigure' : 'minifigures'}</span>
           <span><strong>0</strong> runtime database calls</span>
         </div>
       </section>
       <section className="shell section">
         <div className="section-heading">
-          <div><p className="eyebrow">Start exploring</p><h2>Fixture catalogue highlights</h2></div>
+          <div><p className="eyebrow">Start exploring</p><h2>Catalogue highlights</h2></div>
           <Link href="/parts/">View all parts →</Link>
         </div>
         <div className="card-grid">
@@ -40,6 +42,22 @@ export default function HomePage() {
           ))}
         </div>
       </section>
+      {featuredMinifigs.length > 0 ? <section className="shell section section-secondary">
+        <div className="section-heading">
+          <div><p className="eyebrow">Minifigure intelligence</p><h2>Set appearances and components</h2></div>
+          <Link href="/minifigs/">View all minifigures →</Link>
+        </div>
+        <div className="card-grid">
+          {featuredMinifigs.map((minifig) => (
+            <article className="part-card" key={minifig.id}>
+              <div className="part-id">{minifig.id}</div>
+              <h3><Link href={`/minifigs/${minifig.slug}/`}>{minifig.name}</Link></h3>
+              <p>{pluralize(minifig.statistics.setCount, 'set')} · {pluralize(minifig.statistics.componentPartCount, 'component unit')}</p>
+              <Link className="text-link" href={`/minifigs/${minifig.slug}/`}>Open minifigure record</Link>
+            </article>
+          ))}
+        </div>
+      </section> : null}
       <section className="trust-strip">
         <div className="shell trust-grid">
           <div><strong>Versioned</strong><span>Every page comes from one pinned release.</span></div>

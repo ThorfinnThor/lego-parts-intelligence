@@ -10,6 +10,7 @@ export function SiteHeader() {
         </Link>
         <nav aria-label="Primary navigation">
           <Link href="/parts/">Parts</Link>
+          <Link href="/minifigs/">Minifigures</Link>
           <Link href="/search/">Search</Link>
           <Link href="/rankings/most-common-parts/">Rankings</Link>
           <Link href="/methodology/data-sources/">Methodology</Link>

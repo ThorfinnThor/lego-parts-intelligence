@@ -13,6 +13,8 @@ for (const filename of [
   'sets.csv',
   'inventories.csv',
   'inventory_parts.csv',
+  'minifigs.csv',
+  'inventory_minifigs.csv',
   'part_relationships.csv',
 ]) {
   counts[filename] = (await readSnapshotCsv(directory, filename)).length;

@@ -19,3 +19,8 @@ inventory_id,part_num,color_id,quantity,is_spare
 5,3002,71,12,false
 5,3020,15,18,false
 5,4070a,71,3,false
+6,973c01,4,1,false
+6,3626c,1,1,false
+6,970c00,15,1,false
+7,973c01,15,1,false
+7,3626c,4,1,false

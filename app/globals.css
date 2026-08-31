@@ -68,7 +68,7 @@ h3 { font-size: 1.35rem; }
 .breadcrumbs ol { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; list-style: none; }
 .breadcrumbs li:not(:last-child)::after { content: ' /'; margin-left: 8px; color: #9aa39c; }
 .list-grid { margin-top: 36px; }
-.list-card { padding: 22px; }
+.list-card { padding: 22px; content-visibility: auto; contain-intrinsic-size: 220px; }
 .list-card h2 { font-size: 1.2rem; }
 .entity-header { display: flex; justify-content: space-between; gap: 30px; align-items: end; padding-bottom: 30px; }
 .entity-badge { flex: 0 0 auto; margin-bottom: 12px; padding: 9px 14px; background: var(--lime); border-radius: 999px; font-size: 13px; font-weight: 800; }

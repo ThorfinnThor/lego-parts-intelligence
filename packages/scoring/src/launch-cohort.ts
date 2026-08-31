@@ -5,6 +5,7 @@ export const LAUNCH_PAGE_TYPES = [
   'donor',
   'relationship',
   'set_support',
+  'minifig',
   'ranking_or_methodology',
 ] as const;
 

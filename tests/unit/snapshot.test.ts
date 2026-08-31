@@ -10,7 +10,8 @@ describe('rebrickable snapshot adapter', () => {
     const validation = await validateSnapshotDirectory(directory);
     expect(validation.missingFiles).toEqual([]);
     expect(await readSnapshotLabel(directory)).toBe('fixtures-v1');
-    expect((await readSnapshotCsv(directory, 'parts.csv')).length).toBe(6);
+    expect((await readSnapshotCsv(directory, 'parts.csv')).length).toBe(9);
+    expect((await readSnapshotCsv(directory, 'minifigs.csv')).length).toBe(2);
   });
 
   it('rejects a CSV with missing required headers', async () => {

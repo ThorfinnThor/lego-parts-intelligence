@@ -2,7 +2,7 @@
 
 ## Positioning
 
-The differentiator is not another searchable parts list. It is transparent parts intelligence: documented occurrences, variant relationships, inventory-oriented donor rankings, and useful long-tail research pages with clear claim boundaries.
+The differentiator is not another searchable parts list. It is transparent catalogue intelligence: documented part and minifigure occurrences, component inventories, variant relationships, inventory-oriented donor rankings, and useful long-tail research pages with clear claim boundaries.
 
 ## Revenue sequence
 

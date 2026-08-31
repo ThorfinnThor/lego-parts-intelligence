@@ -18,6 +18,8 @@ export const SNAPSHOT_FILES = [
   'sets.csv',
   'inventories.csv',
   'inventory_parts.csv',
+  'minifigs.csv',
+  'inventory_minifigs.csv',
   'part_relationships.csv',
 ] as const;
 
@@ -29,6 +31,8 @@ export const SNAPSHOT_REQUIRED_HEADERS: Record<string, readonly string[]> = {
   'sets.csv': ['set_num', 'name', 'year', 'theme_id', 'num_parts', 'set_img_url'],
   'inventories.csv': ['id', 'version', 'set_num'],
   'inventory_parts.csv': ['inventory_id', 'part_num', 'color_id', 'quantity', 'is_spare'],
+  'minifigs.csv': ['fig_num', 'name', 'num_parts', 'img_url'],
+  'inventory_minifigs.csv': ['inventory_id', 'fig_num', 'quantity'],
   'part_relationships.csv': ['rel_type', 'child_part_num', 'parent_part_num'],
 };
 
