@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import { getAllParts } from '@/lib/data/static-catalogue';
+import { pluralize } from '@/lib/format';
 
 export const dynamic = 'force-static';
 export const revalidate = false;
@@ -21,7 +22,7 @@ export default function PartsPage() {
           <article className="list-card" key={part.id}>
             <span className="part-id">{part.id}</span>
             <h2><Link href={`/parts/${part.slug}/`}>{part.name}</Link></h2>
-            <p>{part.category?.name ?? 'Uncategorized'} · {part.statistics.setCount} sets</p>
+            <p>{part.category?.name ?? 'Uncategorized'} · {pluralize(part.statistics.setCount, 'set')}</p>
           </article>
         ))}
       </div>

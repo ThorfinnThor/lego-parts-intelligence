@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import { getSetBySlug, getSetPageParams, isPartPageAvailable } from '@/lib/data/static-catalogue';
+import { pluralize } from '@/lib/format';
 
 export const dynamic = 'force-static';
 export const revalidate = false;
@@ -22,7 +23,7 @@ export default async function SetPage({ params }: { params: Promise<{ setSlug: s
   return <div className="shell page-shell">
     <Breadcrumbs items={[{ label: 'Home', href: '/' }, { label: 'Sets' }, { label: set.name }]} />
     <p className="eyebrow">Support set · {set.id}</p><h1>{set.name}</h1>
-    <p className="lede">{set.year ?? 'Unknown year'} · {set.theme ?? 'Unknown theme'} · {set.totalParts} documented non-spare units in this fixture inventory.</p>
+    <p className="lede">{set.year ?? 'Unknown year'} · {set.theme ?? 'Unknown theme'} · {pluralize(set.totalParts, 'documented non-spare unit')} in this fixture inventory.</p>
     <section className="panel"><h2>Documented parts</h2><div className="table-wrap"><table><thead><tr><th>Part</th><th className="number">Quantity</th></tr></thead><tbody>{set.parts.map((part) => <tr key={part.id}><td>{isPartPageAvailable(part.slug) ? <Link href={`/parts/${part.slug}/`}>{part.name} <small>{part.id}</small></Link> : <>{part.name} <small>{part.id}</small></>}</td><td className="number">{part.quantity}</td></tr>)}</tbody></table></div></section>
     <p className="source-note">Data sourced from Rebrickable. Updated {set.updatedAt.slice(0, 10)}.</p>
   </div>;

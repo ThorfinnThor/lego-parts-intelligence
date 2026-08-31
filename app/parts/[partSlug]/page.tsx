@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import { ScoreMeter } from '@/components/ui/score-meter';
 import { getDonorData, getPartBySlug, getPartPageParams, isPartPageAvailable, isRelationshipPageAvailable, isSetPageAvailable } from '@/lib/data/static-catalogue';
+import { pluralize } from '@/lib/format';
 
 export const dynamic = 'force-static';
 export const revalidate = false;
@@ -19,7 +20,7 @@ export async function generateMetadata({ params }: { params: Promise<{ partSlug:
   if (!part) return {};
   return {
     title: `Part ${part.id} ${part.name} – Sets, Colors & Alternatives`,
-    description: `${part.name} (${part.id}) appears in ${part.statistics.setCount} documented sets and ${part.statistics.colorCount} colors in this catalogue release.`,
+    description: `${part.name} (${part.id}) appears in ${pluralize(part.statistics.setCount, 'documented set')} and ${pluralize(part.statistics.colorCount, 'color')} in this catalogue release.`,
     alternates: { canonical: `/parts/${part.slug}/` },
     robots: part.indexable ? undefined : { index: false, follow: true },
   };
@@ -51,9 +52,9 @@ export default async function PartPage({ params }: { params: Promise<{ partSlug:
       </header>
 
       <section className="stats-grid" aria-label="Part statistics">
-        <div><strong>{part.statistics.setCount}</strong><span>sets</span></div>
-        <div><strong>{part.statistics.colorCount}</strong><span>colors</span></div>
-        <div><strong>{part.statistics.totalQuantity}</strong><span>catalogue units</span></div>
+        <div><strong>{part.statistics.setCount}</strong><span>{part.statistics.setCount === 1 ? 'set' : 'sets'}</span></div>
+        <div><strong>{part.statistics.colorCount}</strong><span>{part.statistics.colorCount === 1 ? 'color' : 'colors'}</span></div>
+        <div><strong>{part.statistics.totalQuantity}</strong><span>{part.statistics.totalQuantity === 1 ? 'catalogue unit' : 'catalogue units'}</span></div>
         <div><strong>{part.years.first ?? '—'}–{part.years.last ?? '—'}</strong><span>documented years</span></div>
       </section>
 
@@ -68,7 +69,7 @@ export default async function PartPage({ params }: { params: Promise<{ partSlug:
           <section className="panel">
             <p className="eyebrow">Documented colors</p><h2>Color coverage</h2>
             <div className="color-list">
-              {part.topColors.map((color) => <div key={color.id}><span className="swatch" style={{ background: color.rgb ? `#${color.rgb}` : '#ddd' }} aria-hidden="true" /><span><strong>{color.name}</strong><small>{color.setCount} sets · {color.totalQuantity} units</small></span></div>)}
+              {part.topColors.map((color) => <div key={color.id}><span className="swatch" style={{ background: color.rgb ? `#${color.rgb}` : '#ddd' }} aria-hidden="true" /><span><strong>{color.name}</strong><small>{pluralize(color.setCount, 'set')} · {pluralize(color.totalQuantity, 'unit')}</small></span></div>)}
             </div>
           </section>
           <section className="panel">

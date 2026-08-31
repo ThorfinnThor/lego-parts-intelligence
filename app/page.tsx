@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { getAllParts, getManifest } from '@/lib/data/static-catalogue';
+import { pluralize } from '@/lib/format';
 
 export const dynamic = 'force-static';
 export const revalidate = false;
@@ -18,8 +19,8 @@ export default function HomePage() {
           <Link className="button secondary" href="/methodology/donor-score/">How donor scoring works</Link>
         </div>
         <div className="release-note" aria-label="Release details">
-          <span><strong>{manifest.counts.parts}</strong> parts in this build</span>
-          <span><strong>{manifest.counts.sets}</strong> support sets</span>
+          <span><strong>{manifest.counts.parts}</strong> {manifest.counts.parts === 1 ? 'part' : 'parts'} in this build</span>
+          <span><strong>{manifest.counts.sets}</strong> support {manifest.counts.sets === 1 ? 'set' : 'sets'}</span>
           <span><strong>0</strong> runtime database calls</span>
         </div>
       </section>
@@ -33,7 +34,7 @@ export default function HomePage() {
             <article className="part-card" key={part.id}>
               <div className="part-id">Part {part.id}</div>
               <h3><Link href={`/parts/${part.slug}/`}>{part.name}</Link></h3>
-              <p>{part.statistics.setCount} sets · {part.statistics.colorCount} colors · {part.statistics.totalQuantity} catalogue units</p>
+              <p>{pluralize(part.statistics.setCount, 'set')} · {pluralize(part.statistics.colorCount, 'color')} · {pluralize(part.statistics.totalQuantity, 'catalogue unit')}</p>
               <Link className="text-link" href={`/donor-sets/${part.slug}/`}>View donor ranking</Link>
             </article>
           ))}
