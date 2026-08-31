@@ -123,3 +123,9 @@ export function getAllMinifigs(): PublicMinifigDetailV1[] {
     .map((slug) => getMinifigBySlug(slug))
     .filter((minifig): minifig is PublicMinifigDetailV1 => Boolean(minifig));
 }
+
+export function getAllSets(): PublicSetDetailV1[] {
+  return getManifest().routes.sets
+    .map((slug) => getSetBySlug(slug))
+    .filter((set): set is PublicSetDetailV1 => Boolean(set));
+}
