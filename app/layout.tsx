@@ -10,7 +10,7 @@ const isPreview = process.env.PREVIEW_RELEASE === '1';
 export const metadata: Metadata = {
   metadataBase: new URL(baseUrl),
   title: { default: 'Parts Intelligence', template: '%s · Parts Intelligence' },
-  description: 'Explore parts, set occurrences, colors, relationships, and transparent inventory donor rankings.',
+  description: 'Explore parts, sets, minifigures, colors, relationships, and transparent inventory donor rankings.',
   ...(isPreview ? { robots: { index: false, follow: false, noarchive: true } } : {}),
 };
 

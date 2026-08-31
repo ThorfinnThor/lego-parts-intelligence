@@ -5,19 +5,23 @@ import {
   dataSourceConfigSchema,
   legalReleaseConfigSchema,
   publicDonorSetSchema,
+  publicMinifigDetailSchema,
   publicPartDetailSchema,
   type CanonicalColor,
+  type CanonicalInventoryMinifig,
   type CanonicalInventoryPart,
+  type CanonicalMinifig,
   type CanonicalPart,
   type CanonicalSet,
   type PublicDonorSetV1,
   type PublicManifestV1,
+  type PublicMinifigDetailV1,
   type PublicPartDetailV1,
   type PublicSetDetailV1,
   type SearchDocumentV1,
 } from '../../data-contracts/src/index';
 import { createStableSlug, shardPrefix } from '../../normalization/src/index';
-import { clamp01, commonalityScore, logNormalize, roundScore, scoreDonorCandidates } from '../../scoring/src/index';
+import { clamp01, createCommonalityScorer, createLogNormalizer, roundScore, scoreDonorCandidates } from '../../scoring/src/index';
 import {
   LAUNCH_PAGE_TYPES,
   selectLaunchCohort,
@@ -36,7 +40,7 @@ import { stableJson } from './stable-json';
 
 interface Category { id: string; name: string; slug: string }
 interface Theme { id: string; name: string }
-interface Inventory { id: string; setId: string }
+interface Inventory { id: string; ownerId: string; ownerType: 'set' | 'minifig'; version: number }
 interface Relationship { type: string; sourcePartId: string; targetPartId: string }
 interface PartStats {
   setCount: number;
@@ -48,6 +52,17 @@ interface PartStats {
   yearSpan: number;
   commonalityScore: number;
   rarityScore: number;
+}
+interface CatalogueIndexes {
+  inventoryById: Map<string, Inventory>;
+  activeInventoryIds: Set<string>;
+  setInventoryIds: Map<string, string[]>;
+  minifigInventoryIds: Map<string, string[]>;
+  inventoryPartsByInventory: Map<string, CanonicalInventoryPart[]>;
+  inventoryPartsByPart: Map<string, CanonicalInventoryPart[]>;
+  inventoryMinifigsByInventory: Map<string, CanonicalInventoryMinifig[]>;
+  inventoryMinifigsByMinifig: Map<string, CanonicalInventoryMinifig[]>;
+  relationshipsByPart: Map<string, Relationship[]>;
 }
 type CsvRow = SourceCsvRow;
 
@@ -64,6 +79,7 @@ export interface ReleaseSummary {
   exportVersion: string;
   parts: number;
   sets: number;
+  minifigs: number;
   indexablePages: number;
   donorPages: number;
   files: number;
@@ -89,7 +105,7 @@ export async function buildRelease(rootDir: string): Promise<ReleaseSummary> {
   await assertSnapshotDirectory(sourceDir);
   const sourceSnapshot = await readSnapshotLabel(sourceDir);
 
-  const [colorRows, categoryRows, themeRows, partRows, setRows, inventoryRows, inventoryPartRows, relationshipRows] =
+  const [colorRows, categoryRows, themeRows, partRows, setRows, inventoryRows, inventoryPartRows, minifigRows, inventoryMinifigRows, relationshipRows] =
     await Promise.all([
       readSnapshotCsv(sourceDir, 'colors.csv'),
       readSnapshotCsv(sourceDir, 'part_categories.csv'),
@@ -98,6 +114,8 @@ export async function buildRelease(rootDir: string): Promise<ReleaseSummary> {
       readSnapshotCsv(sourceDir, 'sets.csv'),
       readSnapshotCsv(sourceDir, 'inventories.csv'),
       readSnapshotCsv(sourceDir, 'inventory_parts.csv'),
+      readSnapshotCsv(sourceDir, 'minifigs.csv'),
+      readSnapshotCsv(sourceDir, 'inventory_minifigs.csv'),
       readSnapshotCsv(sourceDir, 'part_relationships.csv'),
     ]);
 
@@ -105,6 +123,7 @@ export async function buildRelease(rootDir: string): Promise<ReleaseSummary> {
   assertUnique(partRows, 'part_num', 'parts');
   assertUnique(setRows, 'set_num', 'sets');
   assertUnique(inventoryRows, 'id', 'inventories');
+  assertUnique(minifigRows, 'fig_num', 'minifigs');
 
   const colors: CanonicalColor[] = colorRows.map((row) => ({
     id: required(row, 'id'),
@@ -146,10 +165,29 @@ export async function buildRelease(rootDir: string): Promise<ReleaseSummary> {
       ...(imageUrl ? { imageUrl } : {}),
     };
   });
-  const inventories: Inventory[] = inventoryRows.map((row) => ({
-    id: required(row, 'id'),
-    setId: required(row, 'set_num'),
-  }));
+  const minifigs: CanonicalMinifig[] = minifigRows.map((row) => {
+    const id = required(row, 'fig_num');
+    const name = required(row, 'name');
+    const imageUrl = optional(row, 'img_url');
+    assertAllowedImage(imageUrl);
+    return {
+      id,
+      name,
+      slug: createStableSlug(id, name),
+      declaredPartCount: parseInteger(required(row, 'num_parts'), 'num_parts'),
+      ...(imageUrl ? { imageUrl } : {}),
+    };
+  });
+  const setIds = new Set(sets.map((set) => set.id));
+  const minifigIds = new Set(minifigs.map((minifig) => minifig.id));
+  const inventories: Inventory[] = inventoryRows.map((row) => {
+    const id = required(row, 'id');
+    const ownerId = required(row, 'set_num');
+    const version = parseInteger(required(row, 'version'), 'version');
+    if (setIds.has(ownerId)) return { id, ownerId, ownerType: 'set', version };
+    if (minifigIds.has(ownerId)) return { id, ownerId, ownerType: 'minifig', version };
+    throw new Error(`Inventory ${id} references unknown set or minifig: ${ownerId}`);
+  });
   const inventoryParts: CanonicalInventoryPart[] = inventoryPartRows.map((row) => ({
     inventoryId: required(row, 'inventory_id'),
     partId: required(row, 'part_num'),
@@ -157,15 +195,21 @@ export async function buildRelease(rootDir: string): Promise<ReleaseSummary> {
     quantity: parseInteger(required(row, 'quantity'), 'quantity'),
     isSpare: parseBoolean(required(row, 'is_spare')),
   }));
+  const inventoryMinifigs: CanonicalInventoryMinifig[] = inventoryMinifigRows.map((row) => ({
+    inventoryId: required(row, 'inventory_id'),
+    minifigId: required(row, 'fig_num'),
+    quantity: parseInteger(required(row, 'quantity'), 'quantity'),
+  }));
   const relationships: Relationship[] = relationshipRows.map((row) => ({
     type: RELATIONSHIP_TYPES[required(row, 'rel_type')] ?? 'unknown',
     sourcePartId: required(row, 'child_part_num'),
     targetPartId: required(row, 'parent_part_num'),
   }));
 
-  validateReferences({ colors, categories, themes, parts, sets, inventories, inventoryParts, relationships });
+  validateReferences({ colors, categories, themes, parts, sets, minifigs, inventories, inventoryParts, inventoryMinifigs, relationships });
   const exportVersion = process.env.RELEASE_TIMESTAMP ?? FIXTURE_TIMESTAMP;
-  const stats = derivePartStats(parts, sets, inventories, inventoryParts);
+  const indexes = buildCatalogueIndexes(inventories, inventoryParts, inventoryMinifigs, relationships);
+  const stats = derivePartStats(parts, sets, indexes);
   const allPublicParts = buildPublicParts({
     exportVersion,
     parts,
@@ -175,16 +219,18 @@ export async function buildRelease(rootDir: string): Promise<ReleaseSummary> {
     inventories,
     inventoryParts,
     relationships,
+    indexes,
     stats,
   });
-  const allDonorPages = buildDonorPages({ exportVersion, parts, sets, inventories, inventoryParts, stats });
-  const allPublicSets = buildPublicSets({ exportVersion, sets, themes, parts, inventories, inventoryParts });
+  const allDonorPages = buildDonorPages({ exportVersion, parts, sets, indexes, stats });
+  const allPublicMinifigs = buildPublicMinifigs({ exportVersion, minifigs, parts, sets, indexes });
+  const allPublicSets = buildPublicSets({ exportVersion, sets, themes, parts, minifigs, indexes });
   const allRankings = buildRankings(exportVersion, allPublicParts);
   const cohortConfig = parseLaunchCohortConfig(
     JSON.parse(await readFile(path.join(rootDir, 'config', 'launch-cohort.json'), 'utf8')),
   );
   const cohort = selectLaunchCohort(
-    buildLaunchCandidates(allPublicParts, allDonorPages, allPublicSets, allRankings, cohortConfig),
+    buildLaunchCandidates(allPublicParts, allDonorPages, allPublicSets, allPublicMinifigs, allRankings, cohortConfig),
     cohortConfig,
   );
   await writeLaunchArtifacts(rootDir, exportVersion, sourceSnapshot, cohortConfig, cohort);
@@ -199,6 +245,9 @@ export async function buildRelease(rootDir: string): Promise<ReleaseSummary> {
   const selectedRelationshipSlugs = new Set(
     cohort.selected.filter((candidate) => candidate.pageType === 'relationship').map((candidate) => routeEntitySlug(candidate.route, 'parts')),
   );
+  const selectedMinifigSlugs = new Set(
+    cohort.selected.filter((candidate) => candidate.pageType === 'minifig').map((candidate) => routeEntitySlug(candidate.route, 'minifigs')),
+  );
   const publicParts = allPublicParts
     .filter((part) => selectedPartPageSlugs.has(part.slug) || selectedRelationshipSlugs.has(part.slug))
     .map((part) => ({ ...part, indexable: selectedPartPageSlugs.has(part.slug) }));
@@ -206,12 +255,16 @@ export async function buildRelease(rootDir: string): Promise<ReleaseSummary> {
     .filter((page) => selectedRoutes.has(`/donor-sets/${page.partSlug}/`))
     .map((page) => ({ ...page, indexable: true }));
   const publicSets = allPublicSets.filter((set) => selectedRoutes.has(`/sets/${set.slug}/`));
+  const publicMinifigs = allPublicMinifigs
+    .filter((minifig) => selectedMinifigSlugs.has(minifig.slug))
+    .map((minifig) => ({ ...minifig, indexable: true }));
   const rankings = allRankings
     .filter((ranking) => selectedRoutes.has(`/rankings/${ranking.slug}/`))
     .map((ranking) => ({ ...ranking, rows: ranking.rows.filter((row) => selectedPartPageSlugs.has(row.slug)) }));
   const searchDocuments = buildSearchDocuments(
     publicParts.filter((part) => selectedPartPageSlugs.has(part.slug)),
     publicSets,
+    publicMinifigs,
   );
 
   await rm(outputDir, { recursive: true, force: true });
@@ -229,6 +282,10 @@ export async function buildRelease(rootDir: string): Promise<ReleaseSummary> {
   for (const set of publicSets) {
     writtenFiles.push(await writeJson(outputDir, `sets/${set.id}.json`, set));
   }
+  for (const minifig of publicMinifigs) {
+    publicMinifigDetailSchema.parse(minifig);
+    writtenFiles.push(await writeJson(outputDir, `minifigs/${shardPrefix(minifig.id)}/${minifig.id}.json`, minifig));
+  }
   for (const ranking of rankings) {
     writtenFiles.push(await writeJson(outputDir, `rankings/${ranking.slug}.json`, ranking));
   }
@@ -237,6 +294,7 @@ export async function buildRelease(rootDir: string): Promise<ReleaseSummary> {
     parts: Object.fromEntries(publicParts.map((part) => [part.slug, { id: part.id, shard: shardPrefix(part.id) }])),
     donors: Object.fromEntries(donorPages.map((page) => [page.partSlug, { id: page.partId, shard: shardPrefix(page.partId) }])),
     sets: Object.fromEntries(publicSets.map((set) => [set.slug, { id: set.id }])),
+    minifigs: Object.fromEntries(publicMinifigs.map((minifig) => [minifig.slug, { id: minifig.id, shard: shardPrefix(minifig.id) }])),
     rankings: Object.fromEntries(rankings.map((ranking) => [ranking.slug, { id: ranking.slug }])),
   }));
 
@@ -279,9 +337,11 @@ export async function buildRelease(rootDir: string): Promise<ReleaseSummary> {
     counts: {
       parts: allPublicParts.length,
       sets: allPublicSets.length,
+      minifigs: allPublicMinifigs.length,
       partPages: selectedPartPageSlugs.size,
       donorPages: donorPages.length,
       relationshipPages: selectedRelationshipSlugs.size,
+      minifigPages: selectedMinifigSlugs.size,
       rankings: rankings.length,
     },
     routes: {
@@ -289,6 +349,7 @@ export async function buildRelease(rootDir: string): Promise<ReleaseSummary> {
       donors: donorPages.filter((page) => page.indexable).map((page) => page.partSlug).sort(),
       relationships: [...selectedRelationshipSlugs].sort(),
       sets: publicSets.map((set) => set.slug).sort(),
+      minifigs: [...selectedMinifigSlugs].sort(),
       rankings: rankings.map((ranking) => ranking.slug).sort(),
     },
     searchIndexes: ['/data/search-index/catalogue.json'],
@@ -300,6 +361,7 @@ export async function buildRelease(rootDir: string): Promise<ReleaseSummary> {
     exportVersion,
     parts: allPublicParts.length,
     sets: allPublicSets.length,
+    minifigs: allPublicMinifigs.length,
     indexablePages: cohort.selected.length,
     donorPages: manifest.counts.donorPages,
     files: (await listFiles(outputDir)).length,
@@ -378,7 +440,8 @@ function assertAllowedImage(url: string | undefined): void {
 
 function validateReferences(input: {
   colors: CanonicalColor[]; categories: Category[]; themes: Theme[]; parts: CanonicalPart[];
-  sets: CanonicalSet[]; inventories: Inventory[]; inventoryParts: CanonicalInventoryPart[];
+  sets: CanonicalSet[]; minifigs: CanonicalMinifig[]; inventories: Inventory[];
+  inventoryParts: CanonicalInventoryPart[]; inventoryMinifigs: CanonicalInventoryMinifig[];
   relationships: Relationship[];
 }): void {
   const colorIds = new Set(input.colors.map((item) => item.id));
@@ -386,13 +449,26 @@ function validateReferences(input: {
   const themeIds = new Set(input.themes.map((item) => item.id));
   const partIds = new Set(input.parts.map((item) => item.id));
   const setIds = new Set(input.sets.map((item) => item.id));
+  const minifigIds = new Set(input.minifigs.map((item) => item.id));
   const inventoryIds = new Set(input.inventories.map((item) => item.id));
+  const inventoryById = new Map(input.inventories.map((item) => [item.id, item]));
   for (const part of input.parts) if (!categoryIds.has(part.categoryId)) throw new Error(`Broken category FK: ${part.id}`);
   for (const set of input.sets) if (!themeIds.has(set.themeId)) throw new Error(`Broken theme FK: ${set.id}`);
-  for (const inventory of input.inventories) if (!setIds.has(inventory.setId)) throw new Error(`Broken set FK: ${inventory.id}`);
+  for (const inventory of input.inventories) {
+    const validOwner = inventory.ownerType === 'set'
+      ? setIds.has(inventory.ownerId)
+      : minifigIds.has(inventory.ownerId);
+    if (!validOwner) throw new Error(`Broken inventory owner FK: ${inventory.id}/${inventory.ownerId}`);
+  }
   for (const row of input.inventoryParts) {
     if (!inventoryIds.has(row.inventoryId) || !partIds.has(row.partId) || !colorIds.has(row.colorId)) {
       throw new Error(`Broken inventory part FK: ${row.inventoryId}/${row.partId}/${row.colorId}`);
+    }
+  }
+  for (const row of input.inventoryMinifigs) {
+    const inventory = inventoryById.get(row.inventoryId);
+    if (!inventory || inventory.ownerType !== 'set' || !minifigIds.has(row.minifigId)) {
+      throw new Error(`Broken inventory minifig FK: ${row.inventoryId}/${row.minifigId}`);
     }
   }
   for (const relation of input.relationships) {
@@ -402,15 +478,67 @@ function validateReferences(input: {
   }
 }
 
+function buildCatalogueIndexes(
+  inventories: Inventory[],
+  inventoryParts: CanonicalInventoryPart[],
+  inventoryMinifigs: CanonicalInventoryMinifig[],
+  relationships: Relationship[],
+): CatalogueIndexes {
+  const inventoryById = new Map(inventories.map((inventory) => [inventory.id, inventory]));
+  const indexes: CatalogueIndexes = {
+    inventoryById,
+    activeInventoryIds: new Set(),
+    setInventoryIds: new Map(),
+    minifigInventoryIds: new Map(),
+    inventoryPartsByInventory: new Map(),
+    inventoryPartsByPart: new Map(),
+    inventoryMinifigsByInventory: new Map(),
+    inventoryMinifigsByMinifig: new Map(),
+    relationshipsByPart: new Map(),
+  };
+  for (const inventory of inventories) {
+    const ownerIndex = inventory.ownerType === 'set' ? indexes.setInventoryIds : indexes.minifigInventoryIds;
+    const currentId = ownerIndex.get(inventory.ownerId)?.[0];
+    const current = currentId ? inventoryById.get(currentId) : undefined;
+    if (!current || inventory.version > current.version || (
+      inventory.version === current.version && inventory.id.localeCompare(current.id, 'en', { numeric: true }) > 0
+    )) ownerIndex.set(inventory.ownerId, [inventory.id]);
+  }
+  for (const ids of [...indexes.setInventoryIds.values(), ...indexes.minifigInventoryIds.values()]) {
+    if (ids[0]) indexes.activeInventoryIds.add(ids[0]);
+  }
+  for (const row of inventoryParts) {
+    appendToIndex(indexes.inventoryPartsByInventory, row.inventoryId, row);
+    appendToIndex(indexes.inventoryPartsByPart, row.partId, row);
+  }
+  for (const row of inventoryMinifigs) {
+    appendToIndex(indexes.inventoryMinifigsByInventory, row.inventoryId, row);
+    appendToIndex(indexes.inventoryMinifigsByMinifig, row.minifigId, row);
+  }
+  for (const relationship of relationships) {
+    appendToIndex(indexes.relationshipsByPart, relationship.sourcePartId, relationship);
+    if (relationship.type === 'alternate') appendToIndex(indexes.relationshipsByPart, relationship.targetPartId, relationship);
+  }
+  return indexes;
+}
+
+function appendToIndex<T>(index: Map<string, T[]>, key: string, value: T): void {
+  const values = index.get(key);
+  if (values) values.push(value);
+  else index.set(key, [value]);
+}
+
 function derivePartStats(
-  parts: CanonicalPart[], sets: CanonicalSet[], inventories: Inventory[], rows: CanonicalInventoryPart[],
+  parts: CanonicalPart[], sets: CanonicalSet[], indexes: CatalogueIndexes,
 ): Map<string, PartStats> {
   const setMap = new Map(sets.map((item) => [item.id, item]));
-  const inventorySet = new Map(inventories.map((item) => [item.id, item.setId]));
   const raw = parts.map((part) => {
-    const occurrences = rows.filter((row) => row.partId === part.id && !row.isSpare);
+    const occurrences = (indexes.inventoryPartsByPart.get(part.id) ?? []).filter((row) => {
+      const inventory = indexes.inventoryById.get(row.inventoryId);
+      return !row.isSpare && inventory?.ownerType === 'set' && indexes.activeInventoryIds.has(row.inventoryId);
+    });
     const relevantSets = occurrences
-      .map((row) => setMap.get(inventorySet.get(row.inventoryId) ?? ''))
+      .map((row) => setMap.get(indexes.inventoryById.get(row.inventoryId)?.ownerId ?? ''))
       .filter((set): set is CanonicalSet => Boolean(set));
     const years = relevantSets.map((set) => set.year);
     const firstYear = years.length ? Math.min(...years) : undefined;
@@ -426,8 +554,9 @@ function derivePartStats(
       yearSpan: firstYear === undefined || lastYear === undefined ? 0 : lastYear - firstYear + 1,
     };
   });
+  const scoreCommonality = createCommonalityScorer(raw);
   return new Map(raw.map((item) => {
-    const score = commonalityScore(item, raw);
+    const score = scoreCommonality(item);
     return [item.id, { ...item, commonalityScore: score, rarityScore: roundScore(1 - score) }];
   }));
 }
@@ -435,15 +564,17 @@ function derivePartStats(
 function buildPublicParts(input: {
   exportVersion: string; parts: CanonicalPart[]; categories: Category[]; colors: CanonicalColor[];
   sets: CanonicalSet[]; inventories: Inventory[]; inventoryParts: CanonicalInventoryPart[];
-  relationships: Relationship[]; stats: Map<string, PartStats>;
+  relationships: Relationship[]; indexes: CatalogueIndexes; stats: Map<string, PartStats>;
 }): PublicPartDetailV1[] {
   const categories = new Map(input.categories.map((item) => [item.id, item]));
   const colors = new Map(input.colors.map((item) => [item.id, item]));
   const sets = new Map(input.sets.map((item) => [item.id, item]));
-  const inventorySet = new Map(input.inventories.map((item) => [item.id, item.setId]));
   const parts = new Map(input.parts.map((item) => [item.id, item]));
   return input.parts.map((part) => {
-    const occurrences = input.inventoryParts.filter((row) => row.partId === part.id && !row.isSpare);
+    const occurrences = (input.indexes.inventoryPartsByPart.get(part.id) ?? []).filter((row) => {
+      const inventory = input.indexes.inventoryById.get(row.inventoryId);
+      return !row.isSpare && inventory?.ownerType === 'set' && input.indexes.activeInventoryIds.has(row.inventoryId);
+    });
     const partStats = input.stats.get(part.id);
     if (!partStats) throw new Error(`Missing stats for ${part.id}`);
     const category = categories.get(part.categoryId);
@@ -455,17 +586,16 @@ function buildPublicParts(input: {
         id: color.id,
         name: color.name,
         ...(color.rgb ? { rgb: color.rgb } : {}),
-        setCount: new Set(matching.map((row) => inventorySet.get(row.inventoryId))).size,
+        setCount: new Set(matching.map((row) => input.indexes.inventoryById.get(row.inventoryId)?.ownerId)).size,
         totalQuantity: matching.reduce((sum, row) => sum + row.quantity, 0),
       };
     }).sort((left, right) => right.setCount - left.setCount || left.id.localeCompare(right.id));
     const setStats = occurrences.map((row) => {
-      const set = sets.get(inventorySet.get(row.inventoryId) ?? '');
+      const set = sets.get(input.indexes.inventoryById.get(row.inventoryId)?.ownerId ?? '');
       if (!set) throw new Error(`Missing set for inventory ${row.inventoryId}`);
       return { id: set.id, slug: set.slug, name: set.name, year: set.year, quantity: row.quantity };
     }).sort((left, right) => right.quantity - left.quantity || left.id.localeCompare(right.id));
-    const relations = input.relationships
-      .filter((row) => row.sourcePartId === part.id || (row.type === 'alternate' && row.targetPartId === part.id))
+    const relations = (input.indexes.relationshipsByPart.get(part.id) ?? [])
       .map((row) => {
         const targetId = row.sourcePartId === part.id ? row.targetPartId : row.sourcePartId;
         const target = parts.get(targetId);
@@ -504,17 +634,20 @@ function buildPublicParts(input: {
 }
 
 function buildDonorPages(input: {
-  exportVersion: string; parts: CanonicalPart[]; sets: CanonicalSet[]; inventories: Inventory[];
-  inventoryParts: CanonicalInventoryPart[]; stats: Map<string, PartStats>;
+  exportVersion: string; parts: CanonicalPart[]; sets: CanonicalSet[];
+  indexes: CatalogueIndexes; stats: Map<string, PartStats>;
 }): PublicDonorSetV1[] {
   const setMap = new Map(input.sets.map((item) => [item.id, item]));
-  const inventorySet = new Map(input.inventories.map((item) => [item.id, item.setId]));
   return input.parts.map((part) => {
-    const targetRows = input.inventoryParts.filter((row) => row.partId === part.id && !row.isSpare);
+    const targetRows = (input.indexes.inventoryPartsByPart.get(part.id) ?? []).filter((row) => {
+      const inventory = input.indexes.inventoryById.get(row.inventoryId);
+      return !row.isSpare && inventory?.ownerType === 'set' && input.indexes.activeInventoryIds.has(row.inventoryId);
+    });
     const candidateInputs = targetRows.map((target) => {
-      const setId = inventorySet.get(target.inventoryId);
-      if (!setId) throw new Error(`Missing inventory ${target.inventoryId}`);
-      const setRows = input.inventoryParts.filter((row) => row.inventoryId === target.inventoryId && !row.isSpare);
+      const inventory = input.indexes.inventoryById.get(target.inventoryId);
+      if (!inventory || inventory.ownerType !== 'set') throw new Error(`Missing set inventory ${target.inventoryId}`);
+      const setId = inventory.ownerId;
+      const setRows = (input.indexes.inventoryPartsByInventory.get(target.inventoryId) ?? []).filter((row) => !row.isSpare);
       const total = setRows.reduce((sum, row) => sum + row.quantity, 0);
       const otherUnits = setRows.filter((row) => row.partId !== part.id);
       const commonUnits = otherUnits
@@ -559,13 +692,15 @@ function buildDonorPages(input: {
 
 function buildPublicSets(input: {
   exportVersion: string; sets: CanonicalSet[]; themes: Theme[]; parts: CanonicalPart[];
-  inventories: Inventory[]; inventoryParts: CanonicalInventoryPart[];
+  minifigs: CanonicalMinifig[]; indexes: CatalogueIndexes;
 }): PublicSetDetailV1[] {
   const themes = new Map(input.themes.map((item) => [item.id, item.name]));
   const parts = new Map(input.parts.map((item) => [item.id, item]));
+  const minifigs = new Map(input.minifigs.map((item) => [item.id, item]));
   return input.sets.map((set) => {
-    const inventoryIds = new Set(input.inventories.filter((item) => item.setId === set.id).map((item) => item.id));
-    const rows = input.inventoryParts.filter((row) => inventoryIds.has(row.inventoryId) && !row.isSpare);
+    const inventoryIds = input.indexes.setInventoryIds.get(set.id) ?? [];
+    const rows = inventoryIds.flatMap((id) => input.indexes.inventoryPartsByInventory.get(id) ?? []).filter((row) => !row.isSpare);
+    const minifigRows = inventoryIds.flatMap((id) => input.indexes.inventoryMinifigsByInventory.get(id) ?? []);
     return {
       schemaVersion: 1,
       exportVersion: input.exportVersion,
@@ -580,8 +715,60 @@ function buildPublicSets(input: {
         if (!part) throw new Error(`Missing part ${row.partId}`);
         return { id: part.id, slug: part.slug, name: part.name, quantity: row.quantity };
       }).sort((left, right) => right.quantity - left.quantity || left.id.localeCompare(right.id)),
+      totalMinifigs: minifigRows.reduce((sum, row) => sum + row.quantity, 0),
+      minifigs: minifigRows.map((row) => {
+        const minifig = minifigs.get(row.minifigId);
+        if (!minifig) throw new Error(`Missing minifig ${row.minifigId}`);
+        return { id: minifig.id, slug: minifig.slug, name: minifig.name, quantity: row.quantity };
+      }).sort((left, right) => right.quantity - left.quantity || left.id.localeCompare(right.id)),
       updatedAt: input.exportVersion,
     } satisfies PublicSetDetailV1;
+  }).sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function buildPublicMinifigs(input: {
+  exportVersion: string;
+  minifigs: CanonicalMinifig[];
+  parts: CanonicalPart[];
+  sets: CanonicalSet[];
+  indexes: CatalogueIndexes;
+}): PublicMinifigDetailV1[] {
+  const parts = new Map(input.parts.map((part) => [part.id, part]));
+  const sets = new Map(input.sets.map((set) => [set.id, set]));
+  return input.minifigs.map((minifig) => {
+    const appearances = (input.indexes.inventoryMinifigsByMinifig.get(minifig.id) ?? []).flatMap((row) => {
+      const inventory = input.indexes.inventoryById.get(row.inventoryId);
+      if (!inventory || inventory.ownerType !== 'set' || !input.indexes.activeInventoryIds.has(row.inventoryId)) return [];
+      const set = sets.get(inventory.ownerId);
+      if (!set) throw new Error(`Missing set ${inventory.ownerId} for minifig ${minifig.id}`);
+      return [{ id: set.id, slug: set.slug, name: set.name, year: set.year, quantity: row.quantity }];
+    }).sort((left, right) => right.quantity - left.quantity || left.id.localeCompare(right.id));
+    const componentRows = (input.indexes.minifigInventoryIds.get(minifig.id) ?? [])
+      .flatMap((id) => input.indexes.inventoryPartsByInventory.get(id) ?? [])
+      .filter((row) => !row.isSpare);
+    const componentParts = componentRows.map((row) => {
+      const part = parts.get(row.partId);
+      if (!part) throw new Error(`Missing component part ${row.partId} for minifig ${minifig.id}`);
+      return { id: part.id, slug: part.slug, name: part.name, quantity: row.quantity };
+    }).sort((left, right) => right.quantity - left.quantity || left.id.localeCompare(right.id));
+    return {
+      schemaVersion: 1,
+      exportVersion: input.exportVersion,
+      id: minifig.id,
+      slug: minifig.slug,
+      name: minifig.name,
+      ...(minifig.imageUrl ? { image: { url: minifig.imageUrl, source: 'rebrickable' as const } } : {}),
+      declaredPartCount: minifig.declaredPartCount,
+      statistics: {
+        setCount: new Set(appearances.map((set) => set.id)).size,
+        totalQuantity: appearances.reduce((sum, set) => sum + set.quantity, 0),
+        componentPartCount: componentParts.reduce((sum, part) => sum + part.quantity, 0),
+      },
+      sets: appearances,
+      parts: componentParts,
+      indexable: appearances.length > 0 && componentParts.length > 0,
+      updatedAt: input.exportVersion,
+    } satisfies PublicMinifigDetailV1;
   }).sort((left, right) => left.id.localeCompare(right.id));
 }
 
@@ -609,10 +796,15 @@ function buildRankings(exportVersion: string, parts: PublicPartDetailV1[]) {
   ];
 }
 
-function buildSearchDocuments(parts: PublicPartDetailV1[], sets: PublicSetDetailV1[]): SearchDocumentV1[] {
+function buildSearchDocuments(
+  parts: PublicPartDetailV1[],
+  sets: PublicSetDetailV1[],
+  minifigs: PublicMinifigDetailV1[],
+): SearchDocumentV1[] {
   return [
     ...parts.map((part) => ({ id: part.id, slug: part.slug, type: 'part' as const, name: part.name, number: part.id, category: part.category?.name, score: part.statistics.commonalityScore })),
     ...sets.map((set) => ({ id: set.id, slug: set.slug, type: 'set' as const, name: set.name, number: set.id, theme: set.theme, year: set.year })),
+    ...minifigs.map((minifig) => ({ id: minifig.id, slug: minifig.slug, type: 'minifig' as const, name: minifig.name, number: minifig.id })),
   ].sort((left, right) => left.type.localeCompare(right.type) || left.id.localeCompare(right.id));
 }
 
@@ -632,6 +824,7 @@ function parseLaunchCohortConfig(value: unknown): LaunchCohortConfig {
       donor: requiredConfigInteger(pageTypeTargets, 'donor'),
       relationship: requiredConfigInteger(pageTypeTargets, 'relationship'),
       set_support: requiredConfigInteger(pageTypeTargets, 'setSupport'),
+      minifig: requiredConfigInteger(pageTypeTargets, 'minifig'),
       ranking_or_methodology: requiredConfigInteger(pageTypeTargets, 'rankingOrMethodology'),
     },
   };
@@ -653,12 +846,17 @@ function buildLaunchCandidates(
   parts: PublicPartDetailV1[],
   donors: PublicDonorSetV1[],
   sets: PublicSetDetailV1[],
+  minifigs: PublicMinifigDetailV1[],
   rankings: ReturnType<typeof buildRankings>,
   config: LaunchCohortConfig,
 ): LaunchCandidate[] {
   const partBySlug = new Map(parts.map((part) => [part.slug, part]));
   const partOccurrences = parts.map((part) => part.statistics.setCount);
   const setSizes = sets.map((set) => set.totalParts);
+  const minifigOccurrences = minifigs.map((minifig) => minifig.statistics.setCount);
+  const normalizePartOccurrences = createLogNormalizer(partOccurrences);
+  const normalizeSetSizes = createLogNormalizer(setSizes);
+  const normalizeMinifigOccurrences = createLogNormalizer(minifigOccurrences);
   const targetTotal = Object.values(config.pageTypeTargets).reduce((sum, value) => sum + value, 0);
 
   const partCandidates = parts.map((part): LaunchCandidate => ({
@@ -668,7 +866,7 @@ function buildLaunchCandidates(
     hardBlockReasons: part.indexable ? [] : ['part_indexability_gate'],
     components: {
       relationshipDepth: clamp01(part.relationships.length / 5),
-      occurrenceDepth: logNormalize(part.statistics.setCount, partOccurrences),
+      occurrenceDepth: normalizePartOccurrences(part.statistics.setCount),
       derivedInsightCount: clamp01([
         part.topColors.length > 0,
         part.topSets.length > 0,
@@ -731,13 +929,36 @@ function buildLaunchCandidates(
       hardBlockReasons: qualified ? [] : ['set_support_depth_gate'],
       components: {
         relationshipDepth: clamp01(relatedPartCount / Math.max(set.parts.length, 1)),
-        occurrenceDepth: logNormalize(set.totalParts, setSizes),
+        occurrenceDepth: normalizeSetSizes(set.totalParts),
         derivedInsightCount: clamp01([Boolean(set.theme), set.year !== undefined, set.parts.length >= 3].filter(Boolean).length / 3),
         internalLinkValue: clamp01(set.parts.length / 20),
         metadataCompleteness: clamp01([Boolean(set.id), Boolean(set.name), Boolean(set.theme), set.year !== undefined].filter(Boolean).length / 4),
       },
     };
   });
+
+  const minifigCandidates = minifigs.map((minifig): LaunchCandidate => ({
+    pageType: 'minifig',
+    route: `/minifigs/${minifig.slug}/`,
+    qualified: minifig.indexable,
+    hardBlockReasons: minifig.indexable ? [] : ['minifig_indexability_gate'],
+    components: {
+      relationshipDepth: clamp01(minifig.parts.length / 8),
+      occurrenceDepth: normalizeMinifigOccurrences(minifig.statistics.setCount),
+      derivedInsightCount: clamp01([
+        minifig.sets.length > 0,
+        minifig.parts.length > 0,
+        minifig.statistics.totalQuantity > 0,
+      ].filter(Boolean).length / 3),
+      internalLinkValue: clamp01((minifig.sets.length + minifig.parts.length) / 20),
+      metadataCompleteness: clamp01([
+        Boolean(minifig.id),
+        Boolean(minifig.name),
+        Boolean(minifig.image),
+        minifig.declaredPartCount > 0,
+      ].filter(Boolean).length / 4),
+    },
+  }));
 
   const rankingCandidates = rankings.map((ranking): LaunchCandidate => {
     const qualified = ranking.rows.length >= 3;
@@ -775,7 +996,7 @@ function buildLaunchCandidates(
   }));
 
   if (targetTotal > config.maxPages) throw new Error('Launch page-type targets exceed the configured maximum.');
-  return [...partCandidates, ...donorCandidates, ...relationshipCandidates, ...setCandidates, ...rankingCandidates, ...methodologyCandidates];
+  return [...partCandidates, ...donorCandidates, ...relationshipCandidates, ...setCandidates, ...minifigCandidates, ...rankingCandidates, ...methodologyCandidates];
 }
 
 function routeEntitySlug(route: string, prefix: string): string {
@@ -861,6 +1082,7 @@ async function writeSitemaps(
     donor: 'donor-sets.xml',
     relationship: 'relationships.xml',
     set_support: 'set-support.xml',
+    minifig: 'minifigs.xml',
     ranking_or_methodology: 'rankings-and-methodology.xml',
   };
   const segments: Array<{ filename: string; count: number }> = [];

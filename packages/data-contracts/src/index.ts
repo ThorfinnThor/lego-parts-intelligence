@@ -121,6 +121,38 @@ export const publicDonorSetSchema = z.object({
 export type PublicPartDetailV1 = z.infer<typeof publicPartDetailSchema>;
 export type PublicDonorSetV1 = z.infer<typeof publicDonorSetSchema>;
 
+export const publicMinifigDetailSchema = z.object({
+  schemaVersion: z.literal(1),
+  exportVersion: z.string().min(1),
+  id: z.string().min(1),
+  slug: z.string().min(1),
+  name: z.string().min(1),
+  image: z.object({ url: z.url(), source: z.literal('rebrickable') }).optional(),
+  declaredPartCount: z.number().int().nonnegative(),
+  statistics: z.object({
+    setCount: z.number().int().nonnegative(),
+    totalQuantity: z.number().int().nonnegative(),
+    componentPartCount: z.number().int().nonnegative(),
+  }),
+  sets: z.array(z.object({
+    id: z.string().min(1),
+    slug: z.string().min(1),
+    name: z.string().min(1),
+    year: z.number().int().optional(),
+    quantity: z.number().int().positive(),
+  })),
+  parts: z.array(z.object({
+    id: z.string().min(1),
+    slug: z.string().min(1),
+    name: z.string().min(1),
+    quantity: z.number().int().positive(),
+  })),
+  indexable: z.boolean(),
+  updatedAt: z.string().min(1),
+});
+
+export type PublicMinifigDetailV1 = z.infer<typeof publicMinifigDetailSchema>;
+
 export interface PublicSetDetailV1 {
   schemaVersion: 1;
   exportVersion: string;
@@ -131,13 +163,15 @@ export interface PublicSetDetailV1 {
   theme?: string;
   totalParts: number;
   parts: Array<{ id: string; slug: string; name: string; quantity: number }>;
+  totalMinifigs: number;
+  minifigs: Array<{ id: string; slug: string; name: string; quantity: number }>;
   updatedAt: string;
 }
 
 export interface SearchDocumentV1 {
   id: string;
   slug: string;
-  type: 'part' | 'set';
+  type: 'part' | 'set' | 'minifig';
   name: string;
   number: string;
   category?: string;
@@ -160,9 +194,11 @@ export interface PublicManifestV1 {
   counts: {
     parts: number;
     sets: number;
+    minifigs: number;
     partPages: number;
     donorPages: number;
     relationshipPages: number;
+    minifigPages: number;
     rankings: number;
   };
   routes: {
@@ -170,6 +206,7 @@ export interface PublicManifestV1 {
     donors: string[];
     relationships: string[];
     sets: string[];
+    minifigs: string[];
     rankings: string[];
   };
   searchIndexes: string[];
@@ -207,4 +244,18 @@ export interface CanonicalInventoryPart {
   colorId: string;
   quantity: number;
   isSpare: boolean;
+}
+
+export interface CanonicalMinifig {
+  id: string;
+  name: string;
+  slug: string;
+  declaredPartCount: number;
+  imageUrl?: string;
+}
+
+export interface CanonicalInventoryMinifig {
+  inventoryId: string;
+  minifigId: string;
+  quantity: number;
 }

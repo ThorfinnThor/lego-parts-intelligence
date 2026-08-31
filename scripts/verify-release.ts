@@ -2,6 +2,7 @@ import { readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import {
   legalReleaseConfigSchema,
+  publicMinifigDetailSchema,
   publicPartDetailSchema,
   type PublicManifestV1,
 } from '../packages/data-contracts/src/index';
@@ -68,13 +69,16 @@ if (process.env.PREVIEW_RELEASE === '1') {
 }
 
 const manifest = JSON.parse(await readFile(path.join(outDir, 'data', 'manifest.json'), 'utf8')) as PublicManifestV1;
+const routeMap = JSON.parse(await readFile(path.join(outDir, 'data', 'routes.json'), 'utf8')) as {
+  minifigs: Record<string, { id: string; shard: string }>;
+};
 const cohortConfig = JSON.parse(await readFile(path.join(root, 'config', 'launch-cohort.json'), 'utf8')) as {
   minPages: number; targetPages: number; maxPages: number;
 };
 const cohortSummary = JSON.parse(await readFile(path.join(outDir, 'data', 'cohort-summary.json'), 'utf8')) as {
   totalPages: number;
   launchReady: boolean;
-  byType: { part: number; donor: number; relationship: number; set_support: number; ranking_or_methodology: number };
+  byType: { part: number; donor: number; relationship: number; set_support: number; minifig: number; ranking_or_methodology: number };
 };
 const launchPages = JSON.parse(await readFile(path.join(outDir, 'data', 'launch-pages.json'), 'utf8')) as Array<{
   pageType: string; route: string; launchPriorityScore: number;
@@ -91,6 +95,7 @@ if (manifest.counts.partPages !== cohortSummary.byType.part) throw new Error('Ma
 if (manifest.counts.donorPages !== cohortSummary.byType.donor) throw new Error('Manifest donor page count differs from cohort.');
 if (manifest.counts.relationshipPages !== cohortSummary.byType.relationship) throw new Error('Manifest relationship page count differs from cohort.');
 if (manifest.routes.sets.length !== cohortSummary.byType.set_support) throw new Error('Manifest set-support page count differs from cohort.');
+if (manifest.counts.minifigPages !== cohortSummary.byType.minifig) throw new Error('Manifest minifigure page count differs from cohort.');
 if (manifest.counts.rankings > cohortSummary.byType.ranking_or_methodology) throw new Error('Manifest ranking count exceeds cohort guide pages.');
 
 const sitemapDirectory = path.join(outDir, 'sitemaps');
@@ -128,6 +133,16 @@ for (const slug of manifest.routes.parts) {
   const html = await readFile(path.join(outDir, 'parts', slug, 'index.html'), 'utf8');
   if (!html.includes('<h1') || !html.includes('Data sourced from Rebrickable.')) {
     throw new Error(`Part HTML contract failed: ${slug}`);
+  }
+}
+for (const slug of manifest.routes.minifigs) {
+  const target = routeMap.minifigs[slug];
+  if (!target) throw new Error(`Minifigure route target missing: ${slug}`);
+  const { id, shard } = target;
+  publicMinifigDetailSchema.parse(JSON.parse(await readFile(path.join(outDir, 'data', 'minifigs', shard, `${id}.json`), 'utf8')));
+  const html = await readFile(path.join(outDir, 'minifigs', slug, 'index.html'), 'utf8');
+  if (!html.includes('<h1') || !html.includes('Data sourced from Rebrickable.')) {
+    throw new Error(`Minifigure HTML contract failed: ${slug}`);
   }
 }
 

@@ -39,6 +39,14 @@ on:
         description: Approved inventory_parts.csv or .csv.gz URL
         required: true
         type: string
+      minifigs_url:
+        description: Approved minifigs.csv or minifigs.csv.gz URL
+        required: true
+        type: string
+      inventory_minifigs_url:
+        description: Approved inventory_minifigs.csv or .csv.gz URL
+        required: true
+        type: string
       part_relationships_url:
         description: Approved part_relationships.csv or .csv.gz URL
         required: true
@@ -61,6 +69,8 @@ jobs:
       SETS_URL: ${{ inputs.sets_url }}
       INVENTORIES_URL: ${{ inputs.inventories_url }}
       INVENTORY_PARTS_URL: ${{ inputs.inventory_parts_url }}
+      MINIFIGS_URL: ${{ inputs.minifigs_url }}
+      INVENTORY_MINIFIGS_URL: ${{ inputs.inventory_minifigs_url }}
       PART_RELATIONSHIPS_URL: ${{ inputs.part_relationships_url }}
     steps:
       - uses: actions/checkout@v7
@@ -90,6 +100,8 @@ jobs:
           pnpm data:download -- --url="$SETS_URL" --name=sets.csv --snapshot-dir="$snapshot_dir"
           pnpm data:download -- --url="$INVENTORIES_URL" --name=inventories.csv --snapshot-dir="$snapshot_dir"
           pnpm data:download -- --url="$INVENTORY_PARTS_URL" --name=inventory_parts.csv --snapshot-dir="$snapshot_dir"
+          pnpm data:download -- --url="$MINIFIGS_URL" --name=minifigs.csv --snapshot-dir="$snapshot_dir"
+          pnpm data:download -- --url="$INVENTORY_MINIFIGS_URL" --name=inventory_minifigs.csv --snapshot-dir="$snapshot_dir"
           pnpm data:download -- --url="$PART_RELATIONSHIPS_URL" --name=part_relationships.csv --snapshot-dir="$snapshot_dir"
           SOURCE_SNAPSHOT_DIR="$snapshot_dir" pnpm data:validate
           SOURCE_SNAPSHOT_DIR="$snapshot_dir" pnpm data:build

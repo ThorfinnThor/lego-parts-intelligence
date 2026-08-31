@@ -37,7 +37,7 @@ export function SearchClient() {
   const results = query.trim().length > 0 ? search.search(query).slice(0, 24) : [];
   return (
     <div>
-      <label className="search-label" htmlFor="catalogue-search">Part or set name/number</label>
+      <label className="search-label" htmlFor="catalogue-search">Part, set, or minifigure name/number</label>
       <input id="catalogue-search" className="search-input" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Try 3001 or Brick 2 x 4" autoComplete="off" />
       <p className="search-status" role="status">{error ? 'The static index could not be loaded.' : query ? `${results.length} result${results.length === 1 ? '' : 's'}` : `${documents.length} records ready`}</p>
       <div className="search-results">
@@ -48,7 +48,7 @@ export function SearchClient() {
 }
 
 function SearchResultCard({ result }: { result: SearchResult }) {
-  const type = result.type === 'set' ? 'set' : 'part';
-  const href = type === 'set' ? `/sets/${String(result.slug)}/` : `/parts/${String(result.slug)}/`;
+  const type = result.type === 'set' ? 'set' : result.type === 'minifig' ? 'minifig' : 'part';
+  const href = type === 'set' ? `/sets/${String(result.slug)}/` : type === 'minifig' ? `/minifigs/${String(result.slug)}/` : `/parts/${String(result.slug)}/`;
   return <article className="search-result"><span>{type}</span><h2><Link href={href}>{String(result.name)}</Link></h2><p>{String(result.number)}{result.category ? ` · ${String(result.category)}` : ''}{result.theme ? ` · ${String(result.theme)}` : ''}</p></article>;
 }

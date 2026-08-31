@@ -4,10 +4,11 @@
   "targetPages": 7500,
   "maxPages": 10000,
   "pageTypeTargets": {
-    "part": 5500,
+    "part": 5000,
     "donor": 1000,
     "relationship": 700,
     "setSupport": 250,
+    "minifig": 500,
     "rankingOrMethodology": 50
   }
 }

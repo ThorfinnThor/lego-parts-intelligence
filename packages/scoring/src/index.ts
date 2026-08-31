@@ -14,11 +14,29 @@ export function roundScore(value: number): number {
 
 export function logNormalize(value: number, population: readonly number[]): number {
   if (population.length === 0) return 0;
-  const transformed = population.map((item) => Math.log1p(Math.max(0, item)));
-  const min = Math.min(...transformed);
-  const max = Math.max(...transformed);
-  if (max === min) return value > 0 ? 1 : 0;
-  return roundScore((Math.log1p(Math.max(0, value)) - min) / (max - min));
+  return createLogNormalizer(population)(value);
+}
+
+export function createLogNormalizer(population: readonly number[]): (value: number) => number {
+  const range = logRange(population);
+  return (value) => normalizeWithRange(value, range);
+}
+
+function logRange(population: readonly number[]): { min: number; max: number } {
+  if (population.length === 0) return { min: 0, max: 0 };
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+  for (const item of population) {
+    const transformed = Math.log1p(Math.max(0, item));
+    if (transformed < min) min = transformed;
+    if (transformed > max) max = transformed;
+  }
+  return { min, max };
+}
+
+function normalizeWithRange(value: number, range: { min: number; max: number }): number {
+  if (range.max === range.min) return value > 0 ? 1 : 0;
+  return roundScore((Math.log1p(Math.max(0, value)) - range.min) / (range.max - range.min));
 }
 
 export interface CommonalityInputs {
@@ -33,13 +51,28 @@ export function commonalityScore(
   input: CommonalityInputs,
   population: readonly CommonalityInputs[],
 ): number {
+  return createCommonalityScorer(population)(input);
+}
+
+export function createCommonalityScorer(
+  population: readonly CommonalityInputs[],
+): (input: CommonalityInputs) => number {
+  const ranges = {
+    setCount: logRange(population.map((item) => item.setCount)),
+    totalQuantity: logRange(population.map((item) => item.totalQuantity)),
+    themeCount: logRange(population.map((item) => item.themeCount)),
+    colorCount: logRange(population.map((item) => item.colorCount)),
+    yearSpan: logRange(population.map((item) => item.yearSpan)),
+  };
+  return (input) => {
   const score =
-    0.45 * logNormalize(input.setCount, population.map((item) => item.setCount)) +
-    0.2 * logNormalize(input.totalQuantity, population.map((item) => item.totalQuantity)) +
-    0.15 * logNormalize(input.themeCount, population.map((item) => item.themeCount)) +
-    0.1 * logNormalize(input.colorCount, population.map((item) => item.colorCount)) +
-    0.1 * logNormalize(input.yearSpan, population.map((item) => item.yearSpan));
-  return roundScore(score);
+    0.45 * normalizeWithRange(input.setCount, ranges.setCount) +
+    0.2 * normalizeWithRange(input.totalQuantity, ranges.totalQuantity) +
+    0.15 * normalizeWithRange(input.themeCount, ranges.themeCount) +
+    0.1 * normalizeWithRange(input.colorCount, ranges.colorCount) +
+    0.1 * normalizeWithRange(input.yearSpan, ranges.yearSpan);
+    return roundScore(score);
+  };
 }
 
 export interface DonorCandidateInputs {

@@ -1,6 +1,6 @@
 # Parts Intelligence
 
-A static-first catalogue intelligence product for LEGO parts, designed for commercial operation on Cloudflare with no public runtime database dependency.
+A static-first catalogue intelligence product for LEGO parts, sets, and minifigures, designed for commercial operation on Cloudflare with no public runtime database dependency.
 
 Hosting policy: **Cloudflare only**. Preview and production deployments use Cloudflare Workers Static Assets through Wrangler; the repository contains no alternative hosting deployment path.
 
@@ -71,9 +71,9 @@ Source URLs are not hard-coded because their current official values and usage t
 
 Run the downloader once per approved CSV, reusing the same `--snapshot-dir`; its manifest accumulates checksums and source URLs. A URL ending in `.gz` is streamed directly into the requested canonical CSV filename and checksummed after decompression.
 
-The manual `Source snapshot` workflow accepts all eight approved `.csv` or `.csv.gz` URLs in one gated run, validates the complete snapshot, and archives it as one short-lived artifact.
+The manual `Source snapshot` workflow accepts all ten approved `.csv` or `.csv.gz` URLs in one gated run, including minifigures and set-to-minifigure inventories. It validates and builds the complete snapshot before archiving one short-lived artifact.
 
-After all eight expected CSV files have been downloaded into one snapshot directory, validate and build it with:
+After all ten expected CSV files have been downloaded into one snapshot directory, validate and build it with:
 
 ```bash
 SOURCE_SNAPSHOT_DIR=work/source-snapshots/2026-08-16 pnpm data:validate

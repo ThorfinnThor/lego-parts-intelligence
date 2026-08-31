@@ -55,7 +55,7 @@ describe('GitHub Actions contracts', () => {
     });
   });
 
-  it('collects one complete eight-file source snapshot per run', async () => {
+  it('collects one complete ten-file source snapshot per run', async () => {
     const workflow = parse(
       await readFile(path.join(workflowDirectory, 'source-snapshot.yml'), 'utf8'),
     ) as Workflow;
@@ -65,7 +65,9 @@ describe('GitHub Actions contracts', () => {
       'colors_url',
       'confirm_source_review',
       'inventories_url',
+      'inventory_minifigs_url',
       'inventory_parts_url',
+      'minifigs_url',
       'part_categories_url',
       'part_relationships_url',
       'parts_url',
