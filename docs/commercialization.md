@@ -6,7 +6,7 @@ The differentiator is not another searchable parts list. It is transparent catal
 
 ## Revenue sequence
 
-1. **Validate search demand first.** Launch 5,000–10,000 quality-gated pages and measure indexation, impressions, donor-page engagement, and outbound intent.
+1. **Validate search demand first.** Launch a small 250–500 page quality-gated cohort and measure indexation, impressions, donor-page engagement, and outbound intent before expanding.
 2. **Affiliate tests second.** Add only approved partners and direct destinations. Use explicit disclosure plus `rel="sponsored nofollow"`; never add an open redirect.
 3. **Display ads only after legal approval.** The component exists but deliberately renders nothing, and the build blocks an illegal enablement.
 4. **Premium workspace later.** Saved inventories, wanted lists, project coverage, and multi-part donor tools are the strongest subscription candidates. Keep them in a separate authenticated runtime service.
@@ -29,7 +29,7 @@ The differentiator is not another searchable parts list. It is transparent catal
 - No market-price, availability, or “best value” language without a licensed provider.
 - No functional compatibility claim inferred from visual similarity.
 - No ad or affiliate activation from environment variables alone; configuration approval is also required.
-- No scaling beyond 10,000 indexed pages until indexation and template value are demonstrated.
+- No expansion beyond the initial 750-page ceiling until indexation, template value, crawl health, and operator cost are demonstrated in Search Console and the release audit.
 - Keep source/provider logic outside UI and scoring so a licensing change can be handled without a rewrite.
 
 ## Suggested first paid feature

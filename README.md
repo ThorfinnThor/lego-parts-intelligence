@@ -15,7 +15,7 @@ The public site is a pure Next.js static export deployed with **Workers Static A
 - Individual asset: up to 25 MiB.
 - Static asset requests: free and unlimited.
 
-The planned 5,000–10,000 page launch should use Workers Paid if the measured Next.js artifact exceeds 20,000 files. This trades a small fixed platform cost for a much safer asset ceiling while keeping traffic-driven compute cost at zero.
+The initial SEO launch is intentionally progressive: 250–500 qualified pages, with a 750-page safety ceiling. Workers Paid is only needed later if a measured expansion exceeds Cloudflare's free asset ceiling; traffic-driven compute cost remains zero.
 
 ## Local development
 
@@ -41,7 +41,7 @@ It also writes `artifacts/release-readiness/report.md` and `report.json`, combin
 
 ## Deterministic launch cohort
 
-`config/launch-cohort.json` defines the 5,000-page minimum, 7,500-page target, 10,000-page ceiling, and page-type targets. The exporter scores only already-qualified part, donor, relationship, set-support, ranking, and methodology pages. Hard-blocked pages never fill a quota; unused quota is reassigned to the highest-scoring qualified candidates.
+`config/launch-cohort.json` defines the progressive initial cohort: 250-page minimum, 500-page target, and 750-page ceiling. The exporter scores only already-qualified part, donor, relationship, set-support, minifigure, ranking, and methodology pages. Hard-blocked pages never fill a quota; unused quota is reassigned to the highest-scoring qualified candidates. Expansion is gated by measured indexation, impressions, template quality, and crawl health; page volume is never a success criterion by itself.
 
 Every build writes the exact selected routes, per-type coverage, exclusions, scores, and methodology to `artifacts/launch-cohort/`. Production CI retains this audit for 90 days. Only selected dynamic routes are rendered, searched, internally linked, and emitted into segmented sitemaps, which keeps indexable-page and Cloudflare asset growth bounded.
 
@@ -57,7 +57,7 @@ Every build writes the exact selected routes, per-type coverage, exclusions, sco
 
 Pull requests from this repository use `wrangler versions upload --preview-alias pr-<number>`. This creates a Cloudflare Workers preview version without assigning production traffic. Preview builds add global `noindex`, block crawlers through `robots.txt`, verify the complete static artifact, and smoke-test the aliased `workers.dev` URL. Fork and Dependabot pull requests skip deployment while retaining CI and CodeQL checks.
 
-The production workflow sets `PRODUCTION_RELEASE=1`; this makes the build fail if the legal gate is closed, the canonical domain is missing, or fewer than 5,000 qualified pages exist.
+The production workflow sets `PRODUCTION_RELEASE=1`; this makes the build fail if the legal gate is closed, the canonical domain is missing, or fewer than 250 qualified launch pages exist.
 
 ## Source import
 
@@ -95,7 +95,7 @@ See [commercialization.md](docs/commercialization.md), [data-sources.md](docs/da
 
 ## Model routing
 
-Luna High is sufficient for routine repository work, fixtures, UI, SEO templates, CI maintenance, adapters, and deterministic tests. Sol High review is required before a commercial public release of the donor engine, static exporter, public data layer, release pipeline, and the initial 5k–10k cohort.
+Luna High is sufficient for routine repository work, fixtures, UI, SEO templates, CI maintenance, adapters, and deterministic tests. Sol High review is required before a commercial public release of the donor engine, static exporter, public data layer, release pipeline, and any expanded indexation cohort.
 
 ## Trademark and attribution
 
