@@ -14,6 +14,7 @@ export interface ReadinessInput {
   source: {
     status: 'approved' | 'approved_with_conditions' | 'blocked';
     catalogCommercialUse: boolean;
+    externalSetPartMinifigImages: boolean;
     mocImages: false;
     displayAds: 'approved' | 'blocked_pending_terms_context' | 'blocked';
     affiliateLinks: 'approved' | 'per_program_review' | 'blocked_pending_partner_review' | 'blocked';
@@ -53,6 +54,13 @@ export function evaluateReleaseReadiness(input: ReadinessInput): ReadinessCheck[
       id: 'source-production-approval',
       status: input.source.productionApproval ? 'pass' : 'blocked',
       detail: input.source.productionApproval ? 'Operator/legal source approval is recorded.' : 'productionApproval is still false.',
+    },
+    {
+      id: 'catalogue-images',
+      status: 'pass',
+      detail: input.source.externalSetPartMinifigImages
+        ? 'Catalogue images are enabled by the recorded image-rights decision.'
+        : 'Catalogue images are disabled; the exporter strips every source image URL.',
     },
     reviewCheck('source-review', sourceReviewDays, input.source.reviewDueAt),
     {

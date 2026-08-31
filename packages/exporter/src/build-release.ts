@@ -140,8 +140,10 @@ export async function buildRelease(rootDir: string): Promise<ReleaseSummary> {
   const parts: CanonicalPart[] = partRows.map((row) => {
     const id = required(row, 'part_num');
     const name = required(row, 'name');
-    const imageUrl = optional(row, 'part_img_url');
-    assertAllowedImage(imageUrl);
+    const imageUrl = selectCatalogImage(
+      optional(row, 'part_img_url'),
+      sourceConfig.externalSetPartMinifigImages,
+    );
     return {
       id,
       name,
@@ -153,8 +155,10 @@ export async function buildRelease(rootDir: string): Promise<ReleaseSummary> {
   const sets: CanonicalSet[] = setRows.map((row) => {
     const id = required(row, 'set_num');
     const name = required(row, 'name');
-    const imageUrl = optional(row, 'set_img_url');
-    assertAllowedImage(imageUrl);
+    const imageUrl = selectCatalogImage(
+      optional(row, 'set_img_url'),
+      sourceConfig.externalSetPartMinifigImages,
+    );
     return {
       id,
       name,
@@ -168,8 +172,10 @@ export async function buildRelease(rootDir: string): Promise<ReleaseSummary> {
   const minifigs: CanonicalMinifig[] = minifigRows.map((row) => {
     const id = required(row, 'fig_num');
     const name = required(row, 'name');
-    const imageUrl = optional(row, 'img_url');
-    assertAllowedImage(imageUrl);
+    const imageUrl = selectCatalogImage(
+      optional(row, 'img_url'),
+      sourceConfig.externalSetPartMinifigImages,
+    );
     return {
       id,
       name,
@@ -426,8 +432,8 @@ function assertUnique(rows: CsvRow[], key: string, label: string): void {
   }
 }
 
-function assertAllowedImage(url: string | undefined): void {
-  if (!url) return;
+export function selectCatalogImage(url: string | undefined, enabled: boolean): string | undefined {
+  if (!enabled || !url) return undefined;
   try {
     if (/(?:^|\/)mocs?(?:\/|$)/i.test(new URL(url).pathname)) {
       throw new Error(`MOC images are never exportable: ${url}`);
@@ -436,6 +442,7 @@ function assertAllowedImage(url: string | undefined): void {
     if (error instanceof Error && error.message.startsWith('MOC images are never exportable:')) throw error;
     throw new Error(`Invalid image URL in source snapshot: ${url}`);
   }
+  return url;
 }
 
 function validateReferences(input: {

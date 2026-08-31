@@ -6,7 +6,7 @@ export function SiteFooter() {
       <div className="shell footer-grid">
         <div>
           <strong>Parts Intelligence</strong>
-          <p>Independent catalogue analysis for builders. Not affiliated with or endorsed by the LEGO Group.</p>
+          <p>Independent catalogue analysis for builders. Not sponsored, authorized, or endorsed by the LEGO Group.</p>
         </div>
         <div>
           <strong>Transparency</strong>
