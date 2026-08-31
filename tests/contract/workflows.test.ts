@@ -59,7 +59,8 @@ describe('GitHub Actions contracts', () => {
     const workflow = parse(
       await readFile(path.join(workflowDirectory, 'source-snapshot.yml'), 'utf8'),
     ) as Workflow;
-    const inputNames = Object.keys(workflow.on?.workflow_dispatch?.inputs ?? {}).sort();
+    const inputs = workflow.on?.workflow_dispatch?.inputs ?? {};
+    const inputNames = Object.keys(inputs).sort();
 
     expect(inputNames).toEqual([
       'colors_url',
@@ -75,5 +76,14 @@ describe('GitHub Actions contracts', () => {
       'snapshot_id',
       'themes_url',
     ]);
+
+    const sourceInputs = Object.entries(inputs).filter(([name]) => name.endsWith('_url'));
+    expect(sourceInputs).toHaveLength(10);
+    for (const [name, input] of sourceInputs) {
+      expect(input.required, `${name} remains operator-confirmed`).toBe(true);
+      expect(input.default, `${name} has a safe default`).toMatch(
+        new RegExp(`^https://cdn\\.rebrickable\\.com/media/downloads/${name.replace(/_url$/, '')}\\.csv\\.gz$`),
+      );
+    }
   });
 });
