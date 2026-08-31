@@ -3,12 +3,12 @@
   "status": "approved_with_conditions",
   "catalogCommercialUse": true,
   "bulkDownloads": true,
-  "externalSetPartMinifigImages": true,
+  "externalSetPartMinifigImages": false,
   "mocImages": false,
   "attributionText": "Data sourced from Rebrickable.",
-  "displayAds": "blocked_pending_terms_context",
-  "affiliateLinks": "blocked_pending_partner_review",
-  "reviewedAt": "2026-08-16",
-  "reviewDueAt": "2026-11-16",
+  "displayAds": "blocked",
+  "affiliateLinks": "blocked",
+  "reviewedAt": "2026-08-31",
+  "reviewDueAt": "2026-11-30",
   "productionApproval": false
 }

@@ -99,6 +99,6 @@ Luna High is sufficient for routine repository work, fixtures, UI, SEO templates
 
 ## Trademark and attribution
 
-Data sourced from Rebrickable. This independent project is not affiliated with, authorized by, or endorsed by the LEGO Group. LEGO is a trademark of the LEGO Group.
+Data sourced from Rebrickable. LEGO® is a trademark of the LEGO Group of companies which does not sponsor, authorize or endorse this site. Commercial catalogue data is approved with conditions; images, monetization, and production remain blocked pending the documented IP and operator gates.
 
 Copyright © 2026. All rights reserved; no open-source license is granted by this repository.

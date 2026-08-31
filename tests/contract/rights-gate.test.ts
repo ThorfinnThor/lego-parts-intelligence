@@ -1,19 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { dataSourceConfigSchema, legalReleaseConfigSchema } from '../../packages/data-contracts/src/index';
-import { assertReleaseGates } from '../../packages/exporter/src/build-release';
+import { assertReleaseGates, selectCatalogImage } from '../../packages/exporter/src/build-release';
 
 const valid = {
   source: 'rebrickable',
   status: 'approved_with_conditions',
   catalogCommercialUse: true,
   bulkDownloads: true,
-  externalSetPartMinifigImages: true,
+  externalSetPartMinifigImages: false,
   mocImages: false,
   attributionText: 'Data sourced from Rebrickable.',
-  displayAds: 'blocked_pending_terms_context',
-  affiliateLinks: 'blocked_pending_partner_review',
-  reviewedAt: '2026-08-16',
-  reviewDueAt: '2026-11-16',
+  displayAds: 'blocked',
+  affiliateLinks: 'blocked',
+  reviewedAt: '2026-08-31',
+  reviewDueAt: '2026-11-30',
   productionApproval: false,
 } as const;
 
@@ -24,6 +24,19 @@ describe('source rights gate', () => {
 
   it('cannot represent MOC images as exportable', () => {
     expect(() => dataSourceConfigSchema.parse({ ...valid, mocImages: true })).toThrow();
+  });
+
+  it('strips catalogue images when external image rights are disabled', () => {
+    expect(selectCatalogImage('https://cdn.rebrickable.com/media/parts/example.png', false)).toBeUndefined();
+  });
+
+  it('retains an allowed catalogue image only when the image gate is enabled', () => {
+    const url = 'https://cdn.rebrickable.com/media/parts/example.png';
+    expect(selectCatalogImage(url, true)).toBe(url);
+  });
+
+  it('rejects MOC images even when the image gate is enabled', () => {
+    expect(() => selectCatalogImage('https://cdn.rebrickable.com/media/mocs/example.png', true)).toThrow(/MOC images/);
   });
 });
 

@@ -26,6 +26,7 @@ The differentiator is not another searchable parts list. It is transparent catal
 
 ## Product and legal gates
 
+- Commercial Rebrickable catalogue-data use is documented, but catalogue images, ads, affiliate links, and the commercial production release remain blocked pending written LEGO permission or a qualified legal opinion supporting a narrower implementation.
 - No market-price, availability, or “best value” language without a licensed provider.
 - No functional compatibility claim inferred from visual similarity.
 - No ad or affiliate activation from environment variables alone; configuration approval is also required.

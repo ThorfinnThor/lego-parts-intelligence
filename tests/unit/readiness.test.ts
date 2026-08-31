@@ -7,6 +7,7 @@ const readyInput: ReadinessInput = {
   source: {
     status: 'approved',
     catalogCommercialUse: true,
+    externalSetPartMinifigImages: true,
     mocImages: false,
     displayAds: 'approved',
     affiliateLinks: 'approved',
@@ -73,5 +74,16 @@ describe('release readiness', () => {
       },
     });
     expect(checks.find((check) => check.id === 'monetization-gates')?.status).toBe('pass');
+  });
+
+  it('reports that disabled catalogue images are stripped by the exporter', () => {
+    const checks = evaluateReleaseReadiness({
+      ...readyInput,
+      source: { ...readyInput.source, externalSetPartMinifigImages: false },
+    });
+    expect(checks.find((check) => check.id === 'catalogue-images')).toMatchObject({
+      status: 'pass',
+      detail: 'Catalogue images are disabled; the exporter strips every source image URL.',
+    });
   });
 });
