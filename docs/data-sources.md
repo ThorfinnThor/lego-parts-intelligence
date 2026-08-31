@@ -12,6 +12,7 @@ Controls implemented:
 - source downloads and every redirect are restricted to HTTPS hosts under `rebrickable.com`;
 - workflow filenames are restricted to the ten canonical snapshot files;
 - the manual source workflow downloads all ten files in one run, including minifigures and set-to-minifigure inventories, streams official `.csv.gz` inputs into canonical CSV files, validates the complete snapshot, and archives one reproducible artifact;
+- the workflow is prefilled with the current `cdn.rebrickable.com/media/downloads/<file>.csv.gz` paths for all ten files; operators must still review the URLs and source terms before entering `APPROVED`, and may override any path if Rebrickable changes its download location;
 - complete snapshot required: `SOURCE_SNAPSHOT_DIR` must contain the ten canonical CSV files before a non-fixture build;
 - required CSV headers are checked at ingest and unexpected columns are logged for operator review;
 - public attribution in the global footer and data-source page;
